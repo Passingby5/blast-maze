@@ -60,7 +60,7 @@
   var stick = $('stick'), knob = $('knob'), sid = null;
   function stickMove(e) { var r = stick.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy), max = r.width * 0.36, k = d > max ? max / d : 1;
     knob.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)'; stickDir = d < 14 ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'); }
-  stick.addEventListener('pointerdown', function (e) { A.init(); sid = e.pointerId; stick.setPointerCapture(e.pointerId); stickMove(e); e.preventDefault(); });
+  stick.addEventListener('pointerdown', function (e) { A.init(); sid = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (x) { } stickMove(e); e.preventDefault(); });
   stick.addEventListener('pointermove', function (e) { if (e.pointerId === sid) stickMove(e); });
   function stickUp(e) { if (e.pointerId !== sid) return; sid = null; stickDir = null; knob.style.transform = ''; }
   stick.addEventListener('pointerup', stickUp); stick.addEventListener('pointercancel', stickUp);

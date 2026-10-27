@@ -4,7 +4,7 @@ let n = 0; const t = (name, f) => { f(); n++; console.log('ok', name); };
 const run = (g, sec, inp) => { for (let i = 0; i < sec * 60; i++) E.step(g, inp || [], 1 / 60); };
 function blank(mode) { const g = mode === 'battle' ? E.newBattle({ humans: 2, cpus: 1, seed: 3 }) : E.newStory(0, { seed: 5 }); for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] === E.CRATE) g.map[y][x] = E.FLOOR; g.enemies = []; g.items = g.items.map(r => r.map(() => null)); return g; }
 t('1 grid layout', () => { const g = E.newStory(0, { seed: 1 }); assert.strictEqual(g.map.length, 13); assert.strictEqual(g.map[0].length, 15); for (let x = 0; x < 15; x++) assert.strictEqual(g.map[0][x], E.WALL); assert.strictEqual(g.map[2][2], E.WALL); assert.strictEqual(g.map[4][6], E.WALL); assert(g.map.flat().filter(v => v === E.CRATE).length > 20); });
-t('2 spawn corners free', () => { for (let s = 1; s < 30; s++) { const g = E.newBattle({ humans: 1, cpus: 3, seed: s }); [[1, 1], [2, 1], [1, 2], [13, 11], [12, 11], [13, 10], [13, 1], [1, 11]].forEach(([x, y]) => assert.strictEqual(g.map[y][x], E.FLOOR)); } });
+t('2 spawn corners free', () => { for (let s = 1; s < 30; s++) { const g = E.newBattle({ humans: 1, cpus: 3, seed: s }); [[1, 1], [2, 1], [1, 2], [3, 2], [2, 3], [13, 11], [12, 11], [13, 10], [13, 1], [1, 11]].forEach(([x, y]) => assert.strictEqual(g.map[y][x], E.FLOOR)); } });
 t('3 blast shape, timer, walls and crates', () => {
   const g = blank(); g.map[1][4] = E.CRATE; g.map[1][5] = E.CRATE; const p = g.players[0]; p.x = p.tx = 3; p.y = p.ty = 1; p.range = 3; p.inv = 99;
   assert(E.placeBomb(g, p)); run(g, 2.3); assert.strictEqual(g.bombs.length, 1); run(g, 0.15); assert.strictEqual(g.bombs.length, 0);

@@ -32,7 +32,7 @@
 
   function grid(v) { var g = []; for (var y = 0; y < H; y++) { g.push([]); for (var x = 0; x < W; x++) g[y].push(v); } return g; }
   var CORNERS = [[1, 1], [W - 2, H - 2], [W - 2, 1], [1, H - 2]];
-  function safeZone(x, y, spawns) { for (var i = 0; i < spawns.length; i++) { var s = spawns[i]; if (Math.abs(x - s[0]) + Math.abs(y - s[1]) <= 1 || (Math.abs(x - s[0]) <= 2 && y === s[1]) || (Math.abs(y - s[1]) <= 2 && x === s[0])) return true; } return false; }
+  function safeZone(x, y, spawns) { for (var i = 0; i < spawns.length; i++) { var dx = Math.abs(x - spawns[i][0]), dy = Math.abs(y - spawns[i][1]); if (dx <= 2 && dy <= 2 && dx + dy <= 3) return true; } return false; }
 
   function makeMap(rng, density, spawns, keep) {
     var map = grid(FLOOR), items = grid(null);

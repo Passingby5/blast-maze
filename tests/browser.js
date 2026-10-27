@@ -33,20 +33,20 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     const r = s.render; assert.strictEqual(r.dpr, 3); const cssW = await page.evaluate(() => document.getElementById('cv').getBoundingClientRect().width); assert(Math.abs(r.w - cssW * 3) < 2, 'canvas at full dpr'); ok(vp.name + ' touch controls shown; canvas drawn at devicePixelRatio ' + r.dpr + ' (' + r.w + 'px wide)');
     // joystick moves player
     const p0 = s.player; const sb = await page.locator('#stick').boundingBox();
-    await page.evaluate(() => BM.UI.game().enemies.forEach(e => e.alive = false));
+    await page.evaluate(() => { BM.UI.game().players[0].inv = 999; });
     await page.dispatchEvent('#stick', 'pointerdown', { pointerId: 5, clientX: sb.x + sb.width / 2 + 60, clientY: sb.y + sb.height / 2, isPrimary: true });
     await page.waitForTimeout(500); await page.dispatchEvent('#stick', 'pointerup', { pointerId: 5 }); s = await S(); assert(s.player.x > p0.x + 0.5, 'joystick moved player right'); ok(vp.name + ' joystick moves player');
     // bomb button, double tap gives one bomb
     await page.tap('#bombBtn'); await page.waitForTimeout(80); s = await S(); assert.strictEqual(s.bombs, 1); ok(vp.name + ' bomb button drops a bomb');
-    await page.evaluate(() => { BM.UI.game().players[0].inv = 999; }); await page.waitForTimeout(2600); s = await S(); assert(s.flames > 0, 'blast flames visible'); await shot('2-gameplay-blast.jpg', 'portrait'); ok(vp.name + ' bomb explodes in a cross (' + s.flames + ' flame tiles)');
+    await page.evaluate(() => { const g = BM.UI.game(), p = g.players[0]; p.bombs = 3; p.range = 3; const x0 = p.x, y0 = p.y; [[1, 1], [1, 3]].forEach(([x, y]) => { p.x = p.tx = x; p.y = p.ty = y; BM.Engine.placeBomb(g, p); }); p.x = p.tx = 3; p.y = p.ty = 3; g.map[3][3] = 0; }); await page.waitForTimeout(2550); s = await S(); assert(s.flames > 0, 'blast flames visible'); await shot('2-gameplay-blast.jpg', 'portrait'); ok(vp.name + ' bomb explodes in a cross (' + s.flames + ' flame tiles)');
     // power-up pick-up
     await page.waitForTimeout(700);
-    await page.evaluate(() => { const g = BM.UI.game(), p = g.players[0], x = Math.round(p.x), y = Math.round(p.y); g.players[0].x = g.players[0].tx = 1; g.players[0].y = g.players[0].ty = 1; g.players[0].inv = 0; g.items[1][2] = 'fire'; [[3, 1, 'bomb'], [1, 3, 'speed'], [3, 3, 'kick'], [1, 2, 'shield']].forEach(([a, b, k]) => { g.map[b][a] = 0; g.items[b][a] = k; }); });
+    await page.evaluate(() => { const g = BM.UI.game(), p = g.players[0], x = Math.round(p.x), y = Math.round(p.y); g.players[0].x = g.players[0].tx = 1; g.players[0].y = g.players[0].ty = 1; g.players[0].range = 2; g.items[1][2] = 'fire'; [[3, 1, 'bomb'], [1, 3, 'speed'], [3, 3, 'kick'], [1, 2, 'shield']].forEach(([a, b, k]) => { g.map[b][a] = 0; g.items[b][a] = k; }); });
     await page.keyboard.down('ArrowRight'); await page.waitForTimeout(260); await page.keyboard.up('ArrowRight'); await page.waitForTimeout(150); s = await S(); assert.strictEqual(s.player.range, 3); await shot('3-power-up.jpg', 'portrait'); ok(vp.name + ' keyboard move picks up Bigger Blast');
     // pause and resume
     await tap('[data-act=pause]'); s = await S(); assert(s.paused && s.screen === 'overlay'); await layout('pause'); await tap('#ovBtns [data-act=resume]'); assert(!(await S()).paused); ok(vp.name + ' pause and resume');
     // clear level: open portal and walk on it
-    await page.evaluate(() => { const g = BM.UI.game(); g.portal.x = 3; g.portal.y = 1; g.map[1][3] = 0; g.items[1][3] = null; g.bombs = []; });
+    await page.evaluate(() => { const g = BM.UI.game(); g.enemies.forEach(e => e.alive = false); g.portal.x = 3; g.portal.y = 1; g.map[1][3] = 0; g.items[1][3] = null; g.bombs = []; });
     await page.waitForTimeout(200); await page.keyboard.down('ArrowRight'); await page.waitForTimeout(500); await page.keyboard.up('ArrowRight'); await page.waitForTimeout(1900);
     s = await S(); assert.strictEqual(s.status, 'won'); assert(/Level Clear/.test(await page.textContent('#ovTitle'))); assert.strictEqual(s.save.story.level, 1); await layout('clear'); ok(vp.name + ' level clear saves progress to level 2');
     await tap('#ovBtns [data-act=next]'); assert.strictEqual((await S()).level, 1);

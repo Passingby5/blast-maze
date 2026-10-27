@@ -6,9 +6,9 @@
   var DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }, DKEYS = ['u', 'd', 'l', 'r'], OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
   var POWERS = ['bomb', 'fire', 'speed', 'kick', 'shield'];
   var DIFF = {
-    easy: { espeed: 0.8, chase: 0.25, cpuMiss: 0.35, cpuThink: 0.45, lives: 5 },
-    medium: { espeed: 1.0, chase: 0.55, cpuMiss: 0.12, cpuThink: 0.2, lives: 3 },
-    hard: { espeed: 1.2, chase: 0.85, cpuMiss: 0.0, cpuThink: 0.05, lives: 2 }
+    easy: { espeed: 0.8, chase: 0.25, cpuMiss: 0.35, cpuThink: 0.45, lives: 5, see: 2.0, react: 0.15, cpuBombs: 1, hunt: 0.15, huntRange: 4, aim: 0.3, hesitate: 0.4 },
+    medium: { espeed: 1.0, chase: 0.55, cpuMiss: 0.12, cpuThink: 0.2, lives: 3, see: 2.6, react: 0.08, cpuBombs: 3, hunt: 0.7, huntRange: 7, aim: 0.85, hesitate: 0.08 },
+    hard: { espeed: 1.2, chase: 0.85, cpuMiss: 0.0, cpuThink: 0.05, lives: 2, see: 99, react: 0, cpuBombs: 8, hunt: 1, huntRange: 99, aim: 1, hesitate: 0 }
   };
   var ETYPES = { blob: { speed: 1.9, pts: 100 }, chaser: { speed: 2.3, pts: 200 }, ghost: { speed: 1.7, pts: 300, ghost: true }, boss: { speed: 1.5, pts: 2000, hp: 6 } };
   // 12 story levels. b=blob, c=chaser, g=ghost, boss=true. crates = density.
@@ -45,7 +45,7 @@
 
   function makePlayer(id, c, opts) {
     return { id: id, kind: 'player', x: c[0], y: c[1], tx: c[0], ty: c[1], dir: null, face: 'd', speed: 3.2, speedUps: 0, bombs: 1, range: 2, kick: false, shield: 0, inv: 0, alive: true, live: 0,
-      human: !!opts.human, cpu: !opts.human, color: opts.color, name: opts.name, passBomb: null, wins: 0, pts: 0, think: 0, cpuDir: null, anim: 0 };
+      human: !!opts.human, cpu: !opts.human, color: opts.color, name: opts.name, passBomb: null, wins: 0, pts: 0, kos: 0, crates: 0, ups: 0, think: 0, cpuDir: null, anim: 0 };
   }
   function makeEnemy(id, type, x, y, diff) {
     var t = ETYPES[type]; return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: t.speed * DIFF[diff].espeed, ghost: !!t.ghost, hp: t.hp || 1, inv: 0, alive: true, spawnT: 7, anim: 0, brain: true };
@@ -155,7 +155,7 @@
     var tiles = blastTiles(g, b.x, b.y, b.range), broke = 0;
     tiles.forEach(function (t) {
       var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.owner;
-      if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); var ow = byId(g, b.owner); if (ow) ow.pts += 10; if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
+      if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); var ow = byId(g, b.owner); if (ow) { ow.pts += 10; ow.crates++; } if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
       var o = bombAt(g, x, y); if (o && o.timer > 0) o.timer = 0;
     });
     g.events.push({ t: 'boom', x: b.x, y: b.y, tiles: tiles, owner: b.owner }); g.shake = Math.min(1, g.shake + 0.45);
@@ -166,7 +166,7 @@
     if (!e.alive || e.inv > 0) return;
     if (e.kind === 'player' && e.shield > 0) { e.shield--; e.inv = 2; g.events.push({ t: 'shield', x: e.x, y: e.y }); return; }
     if (e.kind === 'enemy' && e.hp > 1) { e.hp--; e.inv = 1.3; g.events.push({ t: 'bosshit', x: e.x, y: e.y }); g.shake = 1; return; }
-    e.alive = false; e.deadT = 0; e.diedAt = g.t; var t0 = tileAt(e), kb = byId(g, g.flameOwner[t0[1]][t0[0]]); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) kb.pts += 100; g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
+    e.alive = false; e.deadT = 0; e.diedAt = g.t; var t0 = tileAt(e), kb = byId(g, g.flameOwner[t0[1]][t0[0]]); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) { kb.pts += 100; kb.kos++; } g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
     if (e.kind === 'enemy') g.score += ETYPES[e.type].pts;
   }
 
@@ -192,8 +192,8 @@
   }
 
   // ---------- CPU / bot brain ----------
-  function dangerMap(g, extra) {
-    var dm = grid(Infinity), bombs = g.bombs.map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range }; });
+  function dangerMap(g, extra, see, self) {
+    var dm = grid(Infinity), bombs = g.bombs.filter(function (b) { return !see || b.timer <= see || b.owner === self; }).map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range }; });
     if (extra) bombs.push(extra);
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) if (g.flames[y][x] > 0) dm[y][x] = 0;
     if (g.mode === 'battle' && g.timeLeft <= SHRINK_AT + 3) for (var si = g.shrinkI; si < Math.min(g.shrink.length - 1, g.shrinkI + 14); si++) { var sc = g.shrink[si]; dm[sc[1]][sc[0]] = Math.min(dm[sc[1]][sc[0]], 0.8); }
@@ -227,17 +227,19 @@
   function cpuInput(g, p, dt) {
     var D = DIFF[g.diff]; if (!p.alive) return { dir: null, bomb: false };
     if (!(p.x === p.tx && p.y === p.ty)) return { dir: p.cpuDir, bomb: false };
-    p.think -= dt; if (p.think > 0 && p.cpuDir == null && !p.bot) return { dir: null, bomb: false };
+    p.think -= dt; if (p.think > 0 && (p.cpuDir == null || p.hes) && !p.bot) return { dir: null, bomb: false }; p.hes = false;
     var isBot = p.bot, miss = isBot ? 0 : D.cpuMiss;
-    var dm = dangerMap(g), tm = threatMap(g, p), here = dm[p.ty][p.tx], inDanger = here < Infinity || tm[p.ty][p.tx] && g.mode === 'story';
+    var dm = dangerMap(g, null, isBot ? 0 : D.see, p.id), tm = threatMap(g, p), here = dm[p.ty][p.tx], inDanger = here < Infinity || tm[p.ty][p.tx] && g.mode === 'story';
     var nodes = reach(g, p, dm, null, 60, !(here < Infinity)), safe = function (n) { return dm[n.y][n.x] === Infinity && !(tm[n.y][n.x]); };
     if (inDanger) {
+      if (!isBot) { p.dangerT = (p.dangerT || 0) + dt; if (p.dangerT < D.react) return { dir: null, bomb: false }; }
       var s = nodes.filter(safe)[0]; p.cpuDir = s ? s.first : null; return { dir: p.cpuDir, bomb: false };
     }
+    p.dangerT = 0;
     // Consider placing a bomb
     var tl = targetsInLine(g, p, p.tx, p.ty);
     var active = g.bombs.filter(function (b) { return b.owner === p.id; }).length;
-    if ((tl.foes > 0 || tl.crates > 0) && active < p.bombs && !bombAt(g, p.tx, p.ty) && g.rng() >= miss) {
+    if ((tl.crates > 0 || (tl.foes > 0 && (isBot || g.rng() < D.aim))) && active < (isBot ? p.bombs : Math.min(p.bombs, D.cpuBombs)) && !bombAt(g, p.tx, p.ty) && g.rng() >= miss) {
       var dm2 = dangerMap(g, { x: p.tx, y: p.ty, timer: BOMB_TIME, range: p.range });
       var save = p.passBomb; p.passBomb = -1; var fake = { id: -1, x: p.tx, y: p.ty }; g.bombs.push(fake);
       var esc = reach(g, p, dm2, tm, 10).filter(function (n) { return dm2[n.y][n.x] === Infinity && !tm[n.y][n.x] && n.d * (1 / p.speed) < BOMB_TIME - 0.6; });
@@ -250,7 +252,8 @@
     cand.forEach(function (n) { if (!goal && n.d > 0 && n.d <= 7 && g.items[n.y][n.x] && g.map[n.y][n.x] === FLOOR) goal = n; });
     if (!goal && g.mode === 'story' && g.portal.open) cand.forEach(function (n) { if (!goal && n.x === g.portal.x && n.y === g.portal.y) goal = n; });
     if (g.mode === 'battle' && !goal) { var foe = null, fd = 1e9; g.players.forEach(function (o) { if (o !== p && o.alive) { var dd = Math.abs(o.x - p.x) + Math.abs(o.y - p.y); if (dd < fd) { fd = dd; foe = o; } } });
-      if (foe && (fd <= 7 || g.timeLeft < 90) && g.rng() > miss) { var bh = 1e9; cand.forEach(function (n) { var t = targetsInLine(g, p, n.x, n.y), dd = Math.abs(n.x - foe.x) + Math.abs(n.y - foe.y) + n.d * 0.3 - (t.foes ? 4 : 0); if (n.d > 0 && dd < bh) { bh = dd; goal = n; } }); } }
+      if (foe && (fd <= D.huntRange || g.timeLeft < 90) && g.rng() < D.hunt) { var bh = 1e9; cand.forEach(function (n) { var t = targetsInLine(g, p, n.x, n.y), dd = Math.abs(n.x - foe.x) + Math.abs(n.y - foe.y) + n.d * 0.3 - (t.foes ? 4 : 0); if (n.d > 0 && dd < bh) { bh = dd; goal = n; } }); } }
+    if (!goal && g.mode === 'story' && g.portal.open) { var bp = 1e9; cand.forEach(function (n) { var t = targetsInLine(g, p, n.x, n.y); if (!t.crates) return; var dd = Math.abs(n.x - g.portal.x) + Math.abs(n.y - g.portal.y) + n.d * 0.2; if (dd < bp) { bp = dd; goal = n; } }); }
     if (!goal) { var best = -1; cand.forEach(function (n) { if (n.d === 0 && !isBot) return; var t = targetsInLine(g, p, n.x, n.y), sc = t.foes * 6 + Math.min(t.crates, 3) - n.d * 0.35; if (n.d === 0) sc -= 2; if ((t.foes || t.crates) && sc > best) { best = sc; goal = n; } }); }
     if (!goal && g.mode === 'battle') { var foes = g.players.filter(function (o) { return o !== p && o.alive; }); if (foes.length) { var f = foes[0], bd = 1e9; cand.forEach(function (n) { var dd = Math.abs(n.x - f.x) + Math.abs(n.y - f.y); if (dd < bd) { bd = dd; goal = n; } }); } }
     if (!goal && g.mode === 'story') { var en = g.enemies.filter(function (e) { return e.alive; })[0]; if (en) { var bd2 = 1e9; cand.forEach(function (n) { var dd = Math.abs(n.x - en.x) + Math.abs(n.y - en.y) + (dd < 3 ? 5 : 0); if (dd < bd2 && dd >= 3) { bd2 = dd; goal = n; } }); } }
@@ -260,6 +263,7 @@
     p.cpuDir = goal && goal.d > 0 ? goal.first : null;
     if (g.rng() < miss * 0.3 && p.cpuDir) p.cpuDir = g.rng.pick(DKEYS);
     p.think = D.cpuThink * (isBot ? 0 : 1) * (0.5 + g.rng());
+    if (!isBot && !inDanger && g.rng() < D.hesitate) { p.hes = true; p.think = 0.35 + g.rng() * 0.3; }
     // never step into a dangerous tile
     if (p.cpuDir) { var dd3 = DIRS[p.cpuDir], nxx = p.tx + dd3[0], nyy = p.ty + dd3[1]; if (dm[nyy][nxx] < 1.2 || (tm[nyy][nxx] && g.mode === 'story')) p.cpuDir = null; }
     return { dir: p.cpuDir, bomb: false };
@@ -280,7 +284,7 @@
       p.brain = !p.human || p.bot; moveEnt(g, p, inp.dir || null, dt);
       if (p.inv > 0) p.inv -= dt;
       var t = tileAt(p), it = g.items[t[1]][t[0]];
-      if (it && g.map[t[1]][t[0]] === FLOOR) { g.items[t[1]][t[0]] = null; applyPower(p, it); g.score += 50; p.pts += 20; g.events.push({ t: 'power', x: t[0], y: t[1], kind: it, id: p.id }); }
+      if (it && g.map[t[1]][t[0]] === FLOOR) { g.items[t[1]][t[0]] = null; applyPower(p, it); g.score += 50; p.pts += 20; p.ups++; g.events.push({ t: 'power', x: t[0], y: t[1], kind: it, id: p.id }); }
     });
     // enemies
     g.enemies.forEach(function (e) {

@@ -39,4 +39,6 @@ t('MAJ-1 strict save validation', () => { const good = { bombs: 2, range: 3, spe
   assert.strictEqual(C({ level: 2.5, difficulty: 'easy', carry: good }), null); assert.strictEqual(C({ level: 2, difficulty: 'easy', carry: Object.assign({}, good, { bombs: 'x' }) }), null);
   const cl = C({ level: 2, difficulty: 'easy', carry: Object.assign({}, good, { range: -5, speedUps: 99, lives: 0 }) }).carry; assert.deepStrictEqual([cl.range, cl.speedUps, cl.lives], [1, 4, 1]);
   assert.strictEqual(C(null), null); assert.strictEqual(C([]), null); assert.strictEqual(C({ level: 2, difficulty: 'easy', carry: Object.assign({}, good, { lives: Infinity }) }), null); });
+t('POL-C bot blasts crates to reach a walled-in portal', () => { for (let s = 1; s <= 8; s++) { const g = E.newStory(0, { seed: s }); g.enemies = []; g.portal = { x: 13, y: 11, open: false }; g.map[11][13] = 0; [[12, 11], [13, 10], [11, 11], [13, 9]].forEach(([x, y]) => g.map[y][x] = E.CRATE);
+  g.players[0].bot = true; let n = 0; while (g.status === 'play' && n++ < 60 * 300) { g.players[0].inv = 1; E.step(g, [], 1 / 60); } assert.strictEqual(g.status, 'won', 'seed ' + s); } });
 console.log('unit tests passed:', n);

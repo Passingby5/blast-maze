@@ -52,3 +52,10 @@ body.landscape #bombBtn{right:max(24px,env(safe-area-inset-right))}
 @media (max-height:500px){h1{font-size:40px}h1 span{font-size:32px}.screen{gap:6px;padding:8px}.menu{gap:6px}button.big{min-height:52px;font-size:18px}.tag{display:none}#home{flex-direction:row;flex-wrap:wrap;gap:24px}#logoBot{display:none}.card{padding:12px}.card p{margin:6px 0}}
 body.touch:not(.landscape) #stage{flex:none;padding:10px 0}
 body.touch:not(.landscape) #pad{flex:1;height:auto;min-height:220px}
+#play{overflow:hidden!important;touch-action:none}
+#pad,#stick,#bombBtn,#knob,#cv{touch-action:none}
+#hud{font-size:14px}
+.chip{padding:3px 6px}
+#hudL,#hudM{gap:5px}
+#hudM{min-width:0}
+@media (max-width:420px){#hud{font-size:13px;padding:0 6px}.chip{padding:2px 5px}}

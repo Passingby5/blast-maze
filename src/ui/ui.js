@@ -5,7 +5,11 @@
   var touch = ('ontouchstart' in root) || (root.matchMedia && root.matchMedia('(pointer: coarse)').matches);
   document.body.classList.toggle('touch', !!touch);
   // ---------- screens ----------
-  function show(id) { ['home', 'battleSetup', 'help', 'play', 'overlay'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id && !(id === 'overlay' && s === 'play')); }); st.screen = id; if (id === 'home') refreshHome(); if (id !== 'play' && id !== 'overlay') A.music('menu'); }
+  var hist = false;
+  function guardBack() { if (!hist && root.history && history.pushState) { try { history.pushState({ bm: 1 }, ''); hist = true; } catch (e) { } } }
+  root.addEventListener('popstate', function () { hist = false;
+    if (st.screen === 'play') { pause(); guardBack(); } else if (st.screen === 'overlay' && st.g) { guardBack(); } else if (st.screen !== 'home') { st.g = null; st.paused = false; show('home'); } });
+  function show(id) { if (id !== 'home') guardBack(); ['home', 'battleSetup', 'help', 'play', 'overlay'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id && !(id === 'overlay' && s === 'play')); }); st.screen = id; if (id === 'home') refreshHome(); if (id !== 'play' && id !== 'overlay') A.music('menu'); }
   function refreshHome() {
     $('btnContinue').classList.toggle('hidden', !data.story);
     if (data.story) $('btnContinue').textContent = 'Continue: Level ' + (data.story.level + 1);
@@ -17,9 +21,9 @@
   function save() { S.write(store, data); }
   // ---------- game start ----------
   function startStory(level, carry) {
-    st.story = { level: level, carry: carry || null };
-    data.story = { level: level, difficulty: data.settings.difficulty, carry: carry || { bombs: 1, range: 2, speedUps: 0, kick: false, shield: 0, lives: E.DIFF[data.settings.difficulty].lives, score: 0 } }; save();
-    begin(E.newStory(level, { seed: 20261026, difficulty: data.story.difficulty, carry: data.story.carry }));
+    st.story = { level: level, carry: carry || null }; var attempt = ((data.story && data.story.attempt) || 0) + 1;
+    data.story = { level: level, difficulty: data.settings.difficulty, attempt: attempt, carry: carry || { bombs: 1, range: 2, speedUps: 0, kick: false, shield: 0, lives: E.DIFF[data.settings.difficulty].lives, score: 0 } }; save();
+    begin(E.newStory(level, { seed: 20261026 + attempt * 7919, difficulty: data.story.difficulty, carry: data.story.carry }));
     R.showBanner('Level ' + (level + 1), E.LEVELS[level].name, 2.2); A.music(E.LEVELS[level].boss ? 'boss' : 'main');
   }
   function startBattle(round) {
@@ -34,14 +38,14 @@
     if (st.screen !== 'play' && st.screen !== 'overlay') return;
     var hud = 56, aw = vw - 12, ah = vh - hud - 12;
     if (touch && !land) ah -= 230; if (touch && land) aw = vw - 2 * 200;
-    R.resize(Math.max(150, aw), Math.max(130, ah));
+    R.resize(Math.max(150, aw), Math.max(130, ah), touch ? (land ? 30 : 36) : 0);
   }
   root.addEventListener('resize', layout); root.addEventListener('orientationchange', function () { setTimeout(layout, 200); });
   // ---------- HUD ----------
-  var hudKey = '';
+  var hudKey = ''; function fmt(n) { return n >= 100000 ? Math.floor(n / 1000) + 'k' : String(n); }
   function updateHud(force) {
     var g = st.g; if (!g) return; var p = g.players[0], L, M;
-    if (g.mode === 'story') { L = '<span class="chip">L' + (g.level + 1) + '</span><span class="chip">\u2665 ' + g.lives + '</span>'; M = '<span class="chip">\u25cf ' + p.bombs + '</span><span class="chip">\u2739 ' + p.range + '</span><span class="chip">' + Math.max(0, Math.ceil(g.timeLeft)) + 's</span><span class="chip">' + g.score + '</span>'; }
+    if (g.mode === 'story') { L = '<span class="chip">L' + (g.level + 1) + '</span><span class="chip">\u2665 ' + g.lives + '</span>'; M = '<span class="chip">\u25cf' + p.bombs + ' \u2739' + p.range + '</span><span class="chip">' + Math.max(0, Math.ceil(g.timeLeft)) + 's</span><span class="chip score">' + fmt(g.score) + '</span>'; }
     else { L = g.players.map(function (q) { return '<span class="chip" style="opacity:' + (q.alive ? 1 : 0.4) + '"><i class="dot" style="background:' + q.color + ';color:' + q.color + '"></i>' + q.wins + '</span>'; }).join(''); M = '<span class="chip">' + Math.max(0, Math.ceil(g.timeLeft)) + 's</span>'; }
     var k = L + M; if (k !== hudKey || force) { hudKey = k; $('hudL').innerHTML = L; $('hudM').innerHTML = M; }
   }
@@ -51,12 +55,12 @@
   function who(k) { var m = KMAP[k]; if (!m) return null; var pl = m[0]; if (!st.g || st.g.players.filter(function (p) { return p.human; }).length < 2) pl = 0; return [pl, m[1]]; }
   root.addEventListener('keydown', function (e) {
     A.init();
-    if (e.code === 'KeyP' || e.code === 'Escape') { if (st.screen === 'play') pause(); else if (st.paused) resume(); return; }
+    if (e.code === 'KeyP' || e.code === 'Escape') { if (st.screen === 'play') pause(); else if (st.paused && st.g && st.screen === 'overlay') resume(); return; }
     var m = who(e.code); if (m) { e.preventDefault(); var a = keys[m[0]]; if (a.indexOf(m[1]) < 0) a.push(m[1]); return; }
     if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') { if (st.screen !== 'play') return; e.preventDefault(); if (e.repeat) return; var two = st.g && st.g.players.filter(function (p) { return p.human; }).length > 1; bombQ[two && e.code !== 'Space' ? 1 : 0] = true; }
   });
   root.addEventListener('keyup', function (e) { var m = who(e.code); if (m) { var a = keys[m[0]], i = a.indexOf(m[1]); if (i >= 0) a.splice(i, 1); } });
-  root.addEventListener('blur', function () { keys = [[], []]; });
+  root.addEventListener('blur', function () { keys = [[], []]; if (st.screen === 'play') pause(); });
   var stick = $('stick'), knob = $('knob'), sid = null;
   function stickMove(e) { var r = stick.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy), max = r.width * 0.36, k = d > max ? max / d : 1;
     knob.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)'; stickDir = d < 14 ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'); }
@@ -83,10 +87,10 @@
       case 'diff': data.settings.difficulty = v; save(); refreshHome(); break;
       case 'mute': data.settings.muted = !data.settings.muted; save(); refreshMute(); break;
       case 'help': show('help'); break;
-      case 'home': st.g = null; show('home'); break;
+      case 'home': st.g = null; st.paused = false; show('home'); break;
       case 'pause': pause(); break;
       case 'resume': resume(); break;
-      case 'restart': if (st.g.mode === 'story') startStory(st.story.level, data.story.carry); else startBattle(st.round); break;
+      case 'restart': if (st.g.mode === 'story') { var lv = st.g.lives - 1; if (lv <= 0) { st.g.lives = 0; st.g.status = 'lost'; st.g.endT = 9; st.handled = false; st.paused = false; outcome(); } else startStory(st.story.level, Object.assign(E.carry(st.g), { lives: lv, score: data.story.carry.score })); } else startBattle(st.round); break;
       case 'next': if (st.g.mode === 'story') { var c = E.carry(st.g); if (st.g.level + 1 >= E.LEVELS.length) { data.story = null; save(); show('home'); } else startStory(st.g.level + 1, c); } else startBattle(st.round + 1); break;
       case 'retry': var dl = E.DIFF[data.settings.difficulty].lives, cc = Object.assign({}, data.story.carry, { lives: dl }); startStory(st.story.level, cc); break;
       case 'again': if (st.g.mode === 'story') { var c2 = E.carry(st.g); startStory(st.g.level, c2); } else startBattle(1); break;
@@ -98,7 +102,7 @@
     $('twoNote').classList.toggle('hidden', st.humans < 2);
   }
   function pause() { if (!st.g || st.g.status !== 'play') return; st.paused = true; overlay('Paused', 'Take a breather.', [['Resume', 'resume', 'big'], ['Restart', 'restart'], ['Home', 'home', 'back']]); }
-  function resume() { st.paused = false; show('play'); }
+  function resume() { if (!st.g) { st.paused = false; show('home'); return; } st.paused = false; show('play'); }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && st.screen === 'play') pause(); });
   // ---------- outcome ----------
   function outcome() {
@@ -108,13 +112,13 @@
         if (g.score > data.best) data.best = g.score;
         if (g.level + 1 >= E.LEVELS.length) { data.story = null; save(); overlay('You did it!', 'You beat all 12 levels and the Mega Bolt. Final score: ' + g.score + '. Great teamwork!', [['Play Again', 'story', 'big'], ['Home', 'home', 'back']]); }
         else { data.story = { level: g.level + 1, difficulty: g.diff, carry: E.carry(g) }; save(); overlay('Level Clear!', E.LEVELS[g.level].name + ' done. Score: ' + g.score, [['Next Level', 'next', 'big'], ['Home', 'home', 'back']]); }
-      } else if (g.status === 'dead') { data.story.carry = Object.assign({}, data.story.carry, { lives: g.lives }); save(); overlay('Oops!', 'You have ' + g.lives + (g.lives === 1 ? ' life' : ' lives') + ' left. Try again!', [['Try Again', 'again', 'big'], ['Home', 'home', 'back']]); }
-      else { overlay('Game Over', 'Nice try! You can start again from level ' + (g.level + 1) + '.', [['Retry Level', 'retry', 'big'], ['Home', 'home', 'back']]); }
+      } else if (g.status === 'dead') { data.story.carry = Object.assign({}, data.story.carry, { lives: g.lives }); save(); overlay(g.timeUp ? "Time's up!" : 'Oops!', (g.timeUp ? 'The clock ran out. ' : '') + 'You have ' + g.lives + (g.lives === 1 ? ' life' : ' lives') + ' left. Try again!', [['Try Again', 'again', 'big'], ['Home', 'home', 'back']]); }
+      else { data.story = { level: g.level, difficulty: g.diff, attempt: data.story ? data.story.attempt : 0, carry: Object.assign({}, data.story ? data.story.carry : E.carry(g), { lives: E.DIFF[g.diff].lives }) }; save(); overlay(g.timeUp ? "Time's up! Game Over" : 'Game Over', 'Nice try! You can start again from level ' + (g.level + 1) + ' with full lives.', [['Retry Level', 'retry', 'big'], ['Home', 'home', 'back']]); }
     } else {
       st.wins = g.players.map(function (p) { return p.wins; });
       var w = g.players.find(function (p) { return p.id === g.winner; }), champ = g.players.find(function (p) { return p.wins >= 2; });
       if (champ) overlay(champ.name + ' wins the match!', g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), [['Play Again', 'again', 'big'], ['Home', 'home', 'back']]);
-      else overlay(w ? w.name + ' wins the round!' : 'Time is up! Draw.', g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), [['Next Round', 'next', 'big'], ['Home', 'home', 'back']]);
+      else overlay(w ? w.name + (g.onPoints ? ' wins on points!' : ' wins the round!') : "Time's up! It's a draw.", g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), [['Next Round', 'next', 'big'], ['Home', 'home', 'back']]);
     }
   }
   function sounds(g) { g.events.forEach(function (ev) { var m = { place: 'place', boom: 'boom', crate: 'crate', power: 'power', kick: 'kick', shield: 'shield', pop: 'pop', ko: 'ko', win: 'win', lose: 'lose', portal: 'portal', bosshit: 'bosshit', draw: 'lose' }[ev.t]; if (m) A.sfx(m); }); }

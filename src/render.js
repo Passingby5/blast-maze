@@ -1,16 +1,18 @@
 // Renderer: everything is drawn with canvas paths at devicePixelRatio, so it stays sharp on any screen.
 (function (root) {
   var E = root.BM.Engine, W = E.W, H = E.H;
-  var cv, ctx, dpr = 1, T = 32, bw = 0, bh = 0, staticLayer = null, parts = [], rings = [], time = 0, banner = null;
+  var cv, ctx, dpr = 1, T = 32, bw = 0, bh = 0, vw = 0, vh = 0, camX = 0, camY = 0, camInit = false, staticLayer = null, parts = [], rings = [], time = 0, banner = null;
   function setup(canvas) { cv = canvas; ctx = cv.getContext('2d'); }
-  function resize(cssW, cssH) {
-    dpr = Math.min(3, root.devicePixelRatio || 1); T = Math.floor(Math.min(cssW / W, cssH / H) * 4) / 4; bw = T * W; bh = T * H;
-    cv.style.width = bw + 'px'; cv.style.height = bh + 'px'; cv.width = Math.round(bw * dpr); cv.height = Math.round(bh * dpr); staticLayer = null;
-    return { w: bw, h: bh, tile: T };
+  function resize(cssW, cssH, minT) {
+    // minT: on phones the board may be bigger than the screen; the view then follows the player (camera).
+    dpr = Math.min(3, root.devicePixelRatio || 1); T = Math.floor(Math.max(Math.min(cssW / W, cssH / H), Math.min(minT || 0, cssH / H * 1.25)) * 4) / 4; bw = T * W; bh = T * H;
+    vw = Math.min(bw, Math.floor(cssW)); vh = Math.min(bh, Math.floor(cssH)); camInit = false;
+    cv.style.width = vw + 'px'; cv.style.height = vh + 'px'; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); staticLayer = null;
+    return { w: vw, h: vh, tile: T };
   }
   function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   function buildStatic(g) {
-    var c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; var x2 = c.getContext('2d'); x2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var c = document.createElement('canvas'); c.width = Math.round(bw * dpr); c.height = Math.round(bh * dpr); var x2 = c.getContext('2d'); x2.setTransform(dpr, 0, 0, dpr, 0, 0);
     // floor
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
       var px = x * T, py = y * T, gr = x2.createLinearGradient(px, py, px + T, py + T), even = (x + y) % 2 === 0;
@@ -165,15 +167,18 @@
       else if (ev.t === 'power') { burst(cx, cy, 18, '255,240,140', T * 4, 0.6, T * 0.07, true); }
       else if (ev.t === 'pop' || ev.t === 'ko') { burst(cx, cy, 24, ev.t === 'ko' ? '255,255,255' : '220,170,255', T * 5, 0.8, T * 0.09, true); burst(cx, cy, 6, '230,230,240', T * 1.2, 1, T * 0.25, false, -T); }
       else if (ev.t === 'shield' || ev.t === 'bosshit') { rings.push({ x: cx, y: cy, life: 0.3, max: 0.3, col: '120,255,230' }); }
+      else if (ev.t === 'drop') { staticLayer = null; burst(cx, cy, 8, '190,200,220', T * 2, 0.6, T * 0.15, false, -T); }
       else if (ev.t === 'portal') { burst(cx, cy, 30, '180,150,255', T * 4, 1, T * 0.08, true); }
     });
   }
   function showBanner(text, sub, dur) { banner = { text: text, sub: sub || '', t: 0, dur: dur || 2 }; }
   function frame(g, dt) {
-    time += dt; if (!staticLayer || staticLayer.width !== cv.width) buildStatic(g);
+    time += dt; if (!staticLayer || staticLayer.width !== Math.round(bw * dpr)) buildStatic(g);
+    var focus = g.players.filter(function (p) { return p.human && !p.bot; })[0] || g.players[0], tx = Math.max(0, Math.min(bw - vw, (focus.x + 0.5) * T - vw / 2)), ty = Math.max(0, Math.min(bh - vh, (focus.y + 0.5) * T - vh / 2));
+    if (!camInit) { camX = tx; camY = ty; camInit = true; } else { var kk = Math.min(1, dt * 7); camX += (tx - camX) * kk; camY += (ty - camY) * kk; }
     var c = ctx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
     var sh = g.shake * g.shake * T * 0.3, ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh;
-    c.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
+    c.setTransform(dpr, 0, 0, dpr, (ox - camX) * dpr, (oy - camY) * dpr);
     c.drawImage(staticLayer, 0, 0, bw, bh);
     var x, y;
     if (g.portal) drawPortal(c, g.portal);
@@ -192,14 +197,16 @@
     });
     if (parts.length > 700) parts.splice(0, parts.length - 700);
     c.restore();
-    // vignette
+    // vignette and banner in screen space
+    c.setTransform(dpr, 0, 0, dpr, 0, 0); var bw0 = bw, bh0 = bh; bw = vw; bh = vh;
     var vg = c.createRadialGradient(bw / 2, bh / 2, Math.min(bw, bh) * 0.35, bw / 2, bh / 2, Math.max(bw, bh) * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,10,30,0.35)'); c.fillStyle = vg; c.fillRect(-10, -10, bw + 20, bh + 20);
     if (banner) { banner.t += dt; var a = Math.min(1, banner.t * 4, (banner.dur - banner.t) * 3); if (a <= 0 && banner.t > banner.dur) banner = null; else {
       c.save(); c.globalAlpha = Math.max(0, a); c.fillStyle = 'rgba(10,15,40,0.65)'; rr(c, bw * 0.1, bh * 0.36, bw * 0.8, bh * 0.28, T * 0.5); c.fill();
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.font = '800 ' + Math.round(T * 0.95) + 'px system-ui, sans-serif'; c.shadowColor = 'rgba(255,180,60,0.9)'; c.shadowBlur = T * 0.5; c.fillText(banner.text, bw / 2, bh * (banner.sub ? 0.46 : 0.5));
       if (banner.sub) { c.shadowBlur = 0; c.font = '600 ' + Math.round(T * 0.55) + 'px system-ui, sans-serif'; c.fillStyle = '#ffe9a8'; c.fillText(banner.sub, bw / 2, bh * 0.56); } c.restore(); } }
+    bw = bw0; bh = bh0;
   }
   var EDIR = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
   function drawIcon(canvas, k, size) { var d = Math.min(3, root.devicePixelRatio || 1); canvas.width = size * d; canvas.height = size * d; canvas.style.width = size + 'px'; canvas.style.height = size + 'px'; var c = canvas.getContext('2d'), saveT = T; c.setTransform(d, 0, 0, d, 0, 0); T = size; if (k === 'robot') drawRobot(c, { x: 0, y: 0.05, face: 'd', anim: 0, dir: null, color: '#3fa9ff', shield: 0, inv: 0 }); else drawItem(c, 0, 0, k); T = saveT; }
-  root.BM.Render = { setup: setup, resize: resize, frame: frame, onEvents: onEvents, showBanner: showBanner, drawIcon: drawIcon, reset: function () { parts = []; rings = []; staticLayer = null; banner = null; }, stats: function () { return { dpr: dpr, tile: T, w: cv.width, h: cv.height, parts: parts.length }; } };
+  root.BM.Render = { setup: setup, resize: resize, frame: frame, onEvents: onEvents, showBanner: showBanner, drawIcon: drawIcon, reset: function () { parts = []; rings = []; staticLayer = null; banner = null; }, stats: function () { return { dpr: dpr, tile: T, w: cv.width, h: cv.height, boardW: bw, viewW: vw, parts: parts.length }; } };
 })(this);

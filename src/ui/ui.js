@@ -118,7 +118,7 @@
       st.wins = g.players.map(function (p) { return p.wins; });
       var w = g.players.find(function (p) { return p.id === g.winner; }), champ = g.players.find(function (p) { return p.wins >= 2; });
       var tally = g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), html = null;
-      if (g.onPoints || !w) html = pointsHtml(g, w) + '<p class="tally">Rounds won: ' + esc(tally) + '</p>';
+      if (g.onPoints || !w) html = pointsHtml(g, w) + '<p class="tally">Rounds won: ' + g.players.map(function (p) { return esc(p.name) + ' ' + p.wins; }).join(', ') + '</p>';
       if (champ) overlay(wins(champ.name) + (g.onPoints ? ' the match on points!' : ' the match!'), tally, [['Play Again', 'again', 'big'], ['Home', 'home', 'back']], html);
       else overlay(w ? wins(w.name) + (g.onPoints ? ' on points!' : ' the round!') : "Time's up! It's a draw.", tally, [['Next Round', 'next', 'big'], ['Home', 'home', 'back']], html);
     }

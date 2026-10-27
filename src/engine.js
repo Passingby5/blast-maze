@@ -2,13 +2,13 @@
 (function (root) {
   'use strict';
   var W = 15, H = 13, FLOOR = 0, WALL = 1, CRATE = 2;
-  var BOMB_TIME = 2.4, FLAME_TIME = 0.55, KICK_SPEED = 9, STORY_TIME = 200, BATTLE_TIME = 120;
+  var BOMB_TIME = 2.4, FLAME_TIME = 0.55, KICK_SPEED = 9, STORY_TIME = 300, SHRINK_AT = 70, SHRINK_STEP = 0.3, BATTLE_TIME = 120;
   var DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }, DKEYS = ['u', 'd', 'l', 'r'], OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
   var POWERS = ['bomb', 'fire', 'speed', 'kick', 'shield'];
   var DIFF = {
     easy: { espeed: 0.8, chase: 0.25, cpuMiss: 0.35, cpuThink: 0.45, lives: 5 },
     medium: { espeed: 1.0, chase: 0.55, cpuMiss: 0.12, cpuThink: 0.2, lives: 3 },
-    hard: { espeed: 1.2, chase: 0.85, cpuMiss: 0.0, cpuThink: 0.05, lives: 3 }
+    hard: { espeed: 1.2, chase: 0.85, cpuMiss: 0.0, cpuThink: 0.05, lives: 2 }
   };
   var ETYPES = { blob: { speed: 1.9, pts: 100 }, chaser: { speed: 2.3, pts: 200 }, ghost: { speed: 1.7, pts: 300, ghost: true }, boss: { speed: 1.5, pts: 2000, hp: 6 } };
   // 12 story levels. b=blob, c=chaser, g=ghost, boss=true. crates = density.
@@ -23,7 +23,7 @@
     { name: 'Mixed Bag', crates: 0.6, b: 2, c: 2, g: 1 },
     { name: 'Chase Lane', crates: 0.5, b: 0, c: 4, g: 1 },
     { name: 'Ghost Town', crates: 0.6, b: 1, c: 1, g: 4 },
-    { name: 'Crowded Maze', crates: 0.65, b: 3, c: 3, g: 2 },
+    { name: 'Crowded Maze', crates: 0.55, b: 3, c: 3, g: 2 },
     { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true }
   ];
 
@@ -45,7 +45,7 @@
 
   function makePlayer(id, c, opts) {
     return { id: id, kind: 'player', x: c[0], y: c[1], tx: c[0], ty: c[1], dir: null, face: 'd', speed: 3.2, speedUps: 0, bombs: 1, range: 2, kick: false, shield: 0, inv: 0, alive: true, live: 0,
-      human: !!opts.human, cpu: !opts.human, color: opts.color, name: opts.name, passBomb: null, wins: 0, think: 0, cpuDir: null, anim: 0 };
+      human: !!opts.human, cpu: !opts.human, color: opts.color, name: opts.name, passBomb: null, wins: 0, pts: 0, think: 0, cpuDir: null, anim: 0 };
   }
   function makeEnemy(id, type, x, y, diff) {
     var t = ETYPES[type]; return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: t.speed * DIFF[diff].espeed, ghost: !!t.ghost, hp: t.hp || 1, inv: 0, alive: true, spawnT: 7, anim: 0, brain: true };
@@ -70,15 +70,27 @@
     g.players.push(p); g.lives = c ? c.lives : DIFF[diff].lives; g.score = c ? c.score : 0;
     var spots = [];
     for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) if (g.map[y][x] === FLOOR && x + y >= 11 && !(x === portal[0] && y === portal[1])) spots.push([x, y]);
-    function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff)); }
+    function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; unbox(g, s[0], s[1], 6); g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff)); }
     if (L.boss) { var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null; g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff)); }
     for (var i = 0; i < L.b; i++) place('blob'); for (i = 0; i < L.c; i++) place('chaser'); for (i = 0; i < L.g; i++) place('ghost');
     return g;
   }
 
+  // Make sure an enemy starts with room to roam: open crates next to its pocket until the pocket has n floor tiles.
+  function unbox(g, sx, sy, n) {
+    for (var guard = 0; guard < 20; guard++) {
+      var seen = {}, q = [[sx, sy]], region = []; seen[sx + ',' + sy] = 1;
+      while (q.length) { var c = q.pop(); region.push(c); DKEYS.forEach(function (k) { var d = DIRS[k], nx = c[0] + d[0], ny = c[1] + d[1]; if (!seen[nx + ',' + ny] && g.map[ny][nx] === FLOOR) { seen[nx + ',' + ny] = 1; q.push([nx, ny]); } }); }
+      if (region.length >= n) return region.length;
+      var opened = false; for (var i = 0; i < region.length && !opened; i++) for (var j = 0; j < 4 && !opened; j++) { var d = DIRS[DKEYS[j]], x = region[i][0] + d[0], y = region[i][1] + d[1]; if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; g.items[y][x] = null; opened = true; } }
+      if (!opened) return region.length;
+    }
+  }
+  function openTiles(g) { var n = 0; for (var y = 1; y < H - 1; y++) for (var x = 1; x < W - 1; x++) if (g.map[y][x] !== WALL) n++; return n; }
+  function spiral() { var out = [], x0 = 1, y0 = 1, x1 = W - 2, y1 = H - 2; while (x0 <= x1 && y0 <= y1) { for (var x = x0; x <= x1; x++) out.push([x, y0]); for (var y = y0 + 1; y <= y1; y++) out.push([x1, y]); if (y0 < y1) for (x = x1 - 1; x >= x0; x--) out.push([x, y1]); if (x0 < x1) for (y = y1 - 1; y > y0; y--) out.push([x0, y]); x0++; y0++; x1--; y1--; } return out; }
   function newBattle(opts) {
     opts = opts || {}; var diff = opts.difficulty || 'medium', humans = Math.max(1, Math.min(2, opts.humans || 1)), cpus = Math.max(1, Math.min(4 - humans, opts.cpus == null ? 3 : opts.cpus));
-    var g = base('battle', (opts.seed || 1) >>> 0, diff); g.round = opts.round || 1; g.timeLeft = BATTLE_TIME;
+    var g = base('battle', (opts.seed || 1) >>> 0, diff); g.round = opts.round || 1; g.timeLeft = BATTLE_TIME; g.shrink = spiral(); g.shrinkI = 0; g.shrinkT = 0;
     var n = humans + cpus, spawns = CORNERS.slice(0, n);
     var m = makeMap(g.rng, 0.6, spawns); g.map = m.map; g.items = m.items;
     for (var i = 0; i < n; i++) { var p = makePlayer(g.nextId++, spawns[i], { human: i < humans, color: COLORS[i], name: i < humans ? (humans > 1 ? 'Player ' + (i + 1) : 'You') : 'CPU ' + NAMES[i] }); if (opts.wins) p.wins = opts.wins[i] || 0; g.players.push(p); }
@@ -143,17 +155,18 @@
     var tiles = blastTiles(g, b.x, b.y, b.range), broke = 0;
     tiles.forEach(function (t) {
       var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.owner;
-      if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
+      if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); var ow = byId(g, b.owner); if (ow) ow.pts += 10; if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
       var o = bombAt(g, x, y); if (o && o.timer > 0) o.timer = 0;
     });
     g.events.push({ t: 'boom', x: b.x, y: b.y, tiles: tiles, owner: b.owner }); g.shake = Math.min(1, g.shake + 0.45);
   }
 
+  function byId(g, id) { for (var i = 0; i < g.players.length; i++) if (g.players[i].id === id) return g.players[i]; return null; }
   function hit(g, e) {
     if (!e.alive || e.inv > 0) return;
     if (e.kind === 'player' && e.shield > 0) { e.shield--; e.inv = 2; g.events.push({ t: 'shield', x: e.x, y: e.y }); return; }
     if (e.kind === 'enemy' && e.hp > 1) { e.hp--; e.inv = 1.3; g.events.push({ t: 'bosshit', x: e.x, y: e.y }); g.shake = 1; return; }
-    e.alive = false; e.deadT = 0; g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
+    e.alive = false; e.deadT = 0; e.diedAt = g.t; var t0 = tileAt(e), kb = byId(g, g.flameOwner[t0[1]][t0[0]]); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) kb.pts += 100; g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
     if (e.kind === 'enemy') g.score += ETYPES[e.type].pts;
   }
 
@@ -183,6 +196,7 @@
     var dm = grid(Infinity), bombs = g.bombs.map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range }; });
     if (extra) bombs.push(extra);
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) if (g.flames[y][x] > 0) dm[y][x] = 0;
+    if (g.mode === 'battle' && g.timeLeft <= SHRINK_AT + 3) for (var si = g.shrinkI; si < Math.min(g.shrink.length - 1, g.shrinkI + 14); si++) { var sc = g.shrink[si]; dm[sc[1]][sc[0]] = Math.min(dm[sc[1]][sc[0]], 0.8); }
     bombs.sort(function (a, b) { return a.timer - b.timer; });
     for (var pass = 0; pass < 2; pass++) bombs.forEach(function (b) {
       var t = Math.min(b.timer, dm[b.y][b.x]); b.timer = t;
@@ -235,6 +249,8 @@
     // power-ups nearby
     cand.forEach(function (n) { if (!goal && n.d > 0 && n.d <= 7 && g.items[n.y][n.x] && g.map[n.y][n.x] === FLOOR) goal = n; });
     if (!goal && g.mode === 'story' && g.portal.open) cand.forEach(function (n) { if (!goal && n.x === g.portal.x && n.y === g.portal.y) goal = n; });
+    if (g.mode === 'battle' && !goal) { var foe = null, fd = 1e9; g.players.forEach(function (o) { if (o !== p && o.alive) { var dd = Math.abs(o.x - p.x) + Math.abs(o.y - p.y); if (dd < fd) { fd = dd; foe = o; } } });
+      if (foe && (fd <= 7 || g.timeLeft < 90) && g.rng() > miss) { var bh = 1e9; cand.forEach(function (n) { var t = targetsInLine(g, p, n.x, n.y), dd = Math.abs(n.x - foe.x) + Math.abs(n.y - foe.y) + n.d * 0.3 - (t.foes ? 4 : 0); if (n.d > 0 && dd < bh) { bh = dd; goal = n; } }); } }
     if (!goal) { var best = -1; cand.forEach(function (n) { if (n.d === 0 && !isBot) return; var t = targetsInLine(g, p, n.x, n.y), sc = t.foes * 6 + Math.min(t.crates, 3) - n.d * 0.35; if (n.d === 0) sc -= 2; if ((t.foes || t.crates) && sc > best) { best = sc; goal = n; } }); }
     if (!goal && g.mode === 'battle') { var foes = g.players.filter(function (o) { return o !== p && o.alive; }); if (foes.length) { var f = foes[0], bd = 1e9; cand.forEach(function (n) { var dd = Math.abs(n.x - f.x) + Math.abs(n.y - f.y); if (dd < bd) { bd = dd; goal = n; } }); } }
     if (!goal && g.mode === 'story') { var en = g.enemies.filter(function (e) { return e.alive; })[0]; if (en) { var bd2 = 1e9; cand.forEach(function (n) { var dd = Math.abs(n.x - en.x) + Math.abs(n.y - en.y) + (dd < 3 ? 5 : 0); if (dd < bd2 && dd >= 3) { bd2 = dd; goal = n; } }); } }
@@ -264,7 +280,7 @@
       p.brain = !p.human || p.bot; moveEnt(g, p, inp.dir || null, dt);
       if (p.inv > 0) p.inv -= dt;
       var t = tileAt(p), it = g.items[t[1]][t[0]];
-      if (it && g.map[t[1]][t[0]] === FLOOR) { g.items[t[1]][t[0]] = null; applyPower(p, it); g.score += 50; g.events.push({ t: 'power', x: t[0], y: t[1], kind: it, id: p.id }); }
+      if (it && g.map[t[1]][t[0]] === FLOOR) { g.items[t[1]][t[0]] = null; applyPower(p, it); g.score += 50; p.pts += 20; g.events.push({ t: 'power', x: t[0], y: t[1], kind: it, id: p.id }); }
     });
     // enemies
     g.enemies.forEach(function (e) {
@@ -273,7 +289,7 @@
       var want = e.dir;
       if (e.x === e.tx && e.y === e.ty) want = enemyThink(g, e);
       moveEnt(g, e, want, dt);
-      if (e.type === 'boss') { e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 9; if (helpers < 3) { var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) { return g.map[c[1]][c[0]] === FLOOR && !bombAt(g, c[0], c[1]); })[0]; if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); } } } }
+      if (e.type === 'boss') { e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) { var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) { return g.map[c[1]][c[0]] === FLOOR && !bombAt(g, c[0], c[1]); })[0]; if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); } } } }
     });
     // bombs
     g.bombs.slice().forEach(function (b) {
@@ -289,15 +305,32 @@
     g.players.concat(g.enemies).forEach(function (e) { if (!e.alive) return; var t = tileAt(e); if (g.flames[t[1]][t[0]] > 0) hit(g, e); });
     // contact with enemies (story)
     if (g.mode === 'story') g.enemies.forEach(function (e) { if (!e.alive) return; g.players.forEach(function (p) { var r = e.type === 'boss' ? 0.8 : 0.62; if (p.alive && Math.abs(p.x - e.x) + Math.abs(p.y - e.y) < r) hit(g, p); }); });
+    // battle sudden death: blocks drop in a spiral from the edge once the clock is low
+    if (g.mode === 'battle' && g.timeLeft <= SHRINK_AT) {
+      if (!g.shrinking) { g.shrinking = true; g.events.push({ t: 'hurry' }); }
+      g.shrinkT -= dt;
+      while (g.shrinkT <= 0 && g.shrinkI < g.shrink.length - 1 && openTiles(g) > 7) {
+        var c = g.shrink[g.shrinkI++]; if (g.map[c[1]][c[0]] === WALL) continue; g.shrinkT += SHRINK_STEP;
+        g.map[c[1]][c[0]] = WALL; g.items[c[1]][c[0]] = null; g.flames[c[1]][c[0]] = 0; var bb = bombAt(g, c[0], c[1]); if (bb) g.bombs.splice(g.bombs.indexOf(bb), 1);
+        g.events.push({ t: 'drop', x: c[0], y: c[1] }); g.shake = Math.min(1, g.shake + 0.15);
+        g.players.forEach(function (p) { if (p.alive && (tileAt(p)[0] === c[0] && tileAt(p)[1] === c[1] || p.tx === c[0] && p.ty === c[1])) { p.shield = 0; p.inv = 0; hit(g, p); } });
+      }
+    }
     // outcome
     if (g.mode === 'story') {
       var p = g.players[0];
+      var boss = g.enemies.filter(function (e) { return e.type === 'boss'; })[0];
+      if (boss && !boss.alive) g.enemies.forEach(function (e) { if (e.alive) { e.alive = false; e.deadT = 0; g.events.push({ t: 'pop', x: e.x, y: e.y, id: e.id, type: e.type }); } });
       if (!g.portal.open && g.enemies.every(function (e) { return !e.alive; })) { g.portal.open = true; g.events.push({ t: 'portal', x: g.portal.x, y: g.portal.y }); }
-      if (!p.alive || g.timeLeft <= 0) { if (p.alive) p.alive = false; g.status = 'dead'; g.lives--; if (g.lives <= 0) g.status = 'lost'; g.events.push({ t: 'lose' }); }
+      if (!p.alive || g.timeLeft <= 0) { if (p.alive) { p.alive = false; p.deadT = 0; g.timeUp = true; } g.status = 'dead'; g.lives--; if (g.lives <= 0) g.status = 'lost'; g.events.push({ t: 'lose' }); }
       else if (g.portal.open && Math.abs(p.x - g.portal.x) + Math.abs(p.y - g.portal.y) < 0.3) { g.status = 'won'; g.score += Math.round(g.timeLeft) * 5; g.events.push({ t: 'win' }); }
     } else {
       var alive = g.players.filter(function (p) { return p.alive; });
-      if (alive.length <= 1 || g.timeLeft <= 0) { g.status = 'roundover'; g.winner = alive.length === 1 ? alive[0].id : null; if (alive.length === 1) alive[0].wins++; g.events.push({ t: alive.length === 1 ? 'win' : 'draw' }); }
+      if (alive.length <= 1 || g.timeLeft <= 0) {
+        g.status = 'roundover'; var pool = alive.length ? alive : g.players.filter(function (p) { return p.diedAt === g.t; }), w = null;
+        if (pool.length === 1) w = pool[0]; else if (pool.length > 1) { pool.sort(function (a, b) { return b.pts - a.pts; }); if (pool[0].pts > pool[1].pts) { w = pool[0]; g.onPoints = true; } }
+        g.winner = w ? w.id : null; if (w) w.wins++; g.events.push({ t: w ? 'win' : 'draw' });
+      }
     }
     return g;
   }
@@ -316,7 +349,7 @@
     return seen[g.portal.y][g.portal.x] && g.enemies.every(function (e) { return seen[e.ty][e.tx]; });
   }
 
-  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
+  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
     RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.BM = root.BM || {}; root.BM.Engine = api; }
 })(this);

@@ -17,5 +17,9 @@ for (const diff of ['easy', 'medium', 'hard']) for (let s = 1; s <= SEEDS * 2; s
   while (g.status === 'play') { E.step(g, [], DT); if (++n > 60 * (E.BATTLE_TIME + 2)) throw new Error('softlock battle'); }
   games++; if (g.winner == null) draws++; else wins[g.winner] = (wins[g.winner] || 0) + 1;
 }
-console.log('battle winners by slot:', JSON.stringify(wins), 'draws:', draws);
+console.log('battle winners by slot:', JSON.stringify(wins), 'draws:', draws, 'of', SEEDS * 6);
+assert(draws / (SEEDS * 6) < 0.25, 'too many battle draws');
+// MAJ-4: boss levels and level 11 should rarely run out of time (invincible bot as a stand-in for a careful player)
+for (const diff of ['easy', 'medium', 'hard']) for (const lv of [5, 10, 11]) { let to = 0; for (let s = 1; s <= SEEDS; s++) { const g = E.newStory(lv, { seed: s, difficulty: diff }); g.players[0].bot = true; while (g.status === 'play') { g.players[0].inv = 1; E.step(g, [], DT); } if (g.timeUp) to++; }
+  console.log('timeouts', diff, 'L' + (lv + 1), to + '/' + SEEDS); assert(to / SEEDS <= 0.15, 'too many timeouts ' + diff + ' L' + (lv + 1)); }
 console.log('ok sim', games, 'games, no softlocks');

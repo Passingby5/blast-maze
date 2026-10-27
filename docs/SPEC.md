@@ -45,3 +45,11 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 28. Pause, Home, then Esc or P stays on home. Restart from Pause costs a life. After Game Over, Continue gives full lives. (browser)
 29. The phone back button or gesture pauses the game instead of leaving. Window blur pauses. An app update waits until you are out of a level. (browser)
 30. Each attempt at a level gets a fresh seeded crate layout. Enemies always start with room to move. On phones the board is drawn with bigger tiles and the view follows your robot. A 5-digit score fits the HUD. Running out of time says "Time's up". (unit + browser)
+
+### Added in v3 (from QA v2)
+31. Win screens use correct grammar: "You win the round!" for you, "Blue wins the round!" for others. (browser)
+32. A points win shows a short kid-friendly reason and a table of knockouts (100), crates (10) and power-ups (20) for every robot. (browser, screenshot 5-points-win.jpg)
+33. Easy CPUs are clearly weaker than Hard: they see bomb danger later, react slower, hold only 1 bomb, hunt less and aim worse. The test bot wins much more often on Easy, and Easy CPUs drop fewer bombs. (tests/difficulty.js)
+34. After you are knocked out in a phone battle, the view zooms out to show the whole board. (browser)
+35. Busy scenes (4 robots, 8 bombs each, range 8, and sudden death) run with p99 frame time under 25 ms at DPR 3. Particles are pooled and capped at 360. Dropped blocks are painted into the cached layer instead of rebuilding it. (tests/perf.js)
+36. The test bot blasts crates to reach a portal that is walled in. (unit)

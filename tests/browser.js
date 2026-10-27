@@ -76,7 +76,15 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     await tap('[data-act=battle]'); await layout('battle setup'); await tap('[data-act=cpus][data-v="3"]'); await tap('[data-act=startBattle]'); s = await S(); assert.strictEqual(s.mode, 'battle'); assert.strictEqual(s.players, 4); assert.strictEqual(s.humans, 1);
     await page.waitForTimeout(4500); await shot('4-landscape-battle.jpg', 'landscape'); await layout('battle'); ok(vp.name + ' battle with 3 CPU robots runs');
     // force round end
-    await page.evaluate(() => { const g = BM.UI.game(); g.players.slice(1).forEach(p => p.alive = false); g.players[0].inv = 99; }); await page.waitForTimeout(1900); assert(/wins the round/.test(await page.textContent('#ovTitle'))); await tap('#ovBtns [data-act=next]'); s = await S(); assert.strictEqual(s.status, 'play'); ok(vp.name + ' round over, next round starts');
+    await page.evaluate(() => { const g = BM.UI.game(); g.players.slice(1).forEach(p => p.alive = false); g.players[0].inv = 99; }); await page.waitForTimeout(1900); assert.strictEqual(await page.textContent('#ovTitle'), 'You win the round!'); await tap('#ovBtns [data-act=next]'); s = await S(); assert.strictEqual(s.status, 'play'); ok(vp.name + ' round over says "You win the round!", next round starts');
+    // points win screen explains the points
+    await page.evaluate(() => { const g = BM.UI.game(); g.shrinkI = g.shrink.length; g.players.forEach(p => p.inv = 99); const st = [[1, 6, 2], [0, 9, 1], [1, 3, 0], [0, 4, 3]]; g.players.forEach((p, i) => { p.kos = st[i][0]; p.crates = st[i][1]; p.ups = st[i][2]; p.pts = p.kos * 100 + p.crates * 10 + p.ups * 20; }); g.players[0].wins = 0; g.timeLeft = 0.05; });
+    await page.waitForTimeout(1900); assert.strictEqual(await page.textContent('#ovTitle'), 'You win on points!'); const pt = await page.textContent('#ovText'); assert(/count points/.test(pt) && /Knock out a robot = 100/.test(pt) && /crate = 10/.test(pt) && /power-up = 20/.test(pt)); assert.strictEqual(await page.locator('table.pts tr').count(), 5);
+    await layout('points'); await shot('5-points-win.jpg', 'portrait'); ok(vp.name + ' points win screen explains KOs, crates and power-ups');
+    await tap('#ovBtns [data-act=next]');
+    // POL-A: when you are knocked out in battle on a phone, the view zooms out to the whole board
+    await page.evaluate(() => { const g = BM.UI.game(); g.players[0].inv = 0; BM.Engine.hit(g, g.players[0]); g.players.slice(1).forEach(p => p.inv = 99); }); await page.waitForTimeout(1300);
+    s = await S(); assert.strictEqual(s.render.viewW, s.render.boardW, 'whole board visible after KO'); ok(vp.name + ' camera shows whole board after you are knocked out');
     await tap('[data-act=pause]'); await tap('#ovBtns [data-act=home]');
     assert.deepStrictEqual(errors, [], vp.name + ' console errors'); ok(vp.name + ' no console errors or warnings');
     await ctx.close();

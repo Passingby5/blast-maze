@@ -70,7 +70,7 @@
     c.strokeStyle = '#c9a36b'; c.lineWidth = T * 0.05; c.lineCap = 'round'; c.beginPath(); c.moveTo(cx, cy - r * 1.05); c.quadraticCurveTo(cx + r * 0.5, cy - r * 1.6, cx + r * 0.75, cy - r * 1.35); c.stroke();
     var sx = cx + r * 0.75, sy = cy - r * 1.35, sg = c.createRadialGradient(sx, sy, 0, sx, sy, T * 0.22);
     sg.addColorStop(0, 'rgba(255,255,220,1)'); sg.addColorStop(0.3, 'rgba(255,200,60,0.9)'); sg.addColorStop(1, 'rgba(255,120,0,0)'); c.fillStyle = sg; c.beginPath(); c.arc(sx, sy, T * 0.22 * (0.8 + Math.random() * 0.4), 0, 7); c.fill();
-    if (Math.random() < 0.5) parts.push({ x: sx, y: sy, vx: (Math.random() - 0.5) * T * 3, vy: -Math.random() * T * 3, life: 0.3, max: 0.3, s: T * 0.05, col: '255,210,90', add: true, g: T * 6 });
+    if (Math.random() < 0.4) spawn(sx, sy, (Math.random() - 0.5) * T * 3, -Math.random() * T * 3, 0.3, 0.3, T * 0.05, '255,210,90', true, T * 6);
   }
   function drawFlames(c, g) {
     c.save(); c.globalCompositeOperation = 'lighter';
@@ -158,7 +158,10 @@
     for (var i = 0; i < 3; i++) { c.strokeStyle = ['rgba(255,255,255,0.9)', 'rgba(140,220,255,0.8)', 'rgba(200,140,255,0.8)'][i]; c.lineWidth = T * 0.05; c.beginPath(); c.ellipse(cx, cy, T * (0.15 + i * 0.1), T * (0.12 + i * 0.08), 0, time * (2 + i) + i, time * (2 + i) + i + 4.2); c.stroke(); }
     c.restore();
   }
-  function burst(x, y, n, col, speed, life, size, add, grav) { for (var i = 0; i < n; i++) { var a = Math.random() * 6.283, s = speed * (0.3 + Math.random() * 0.7); parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: life * (0.6 + Math.random() * 0.4), max: life, s: size * (0.6 + Math.random() * 0.8), col: col, add: add, g: grav || 0 }); } }
+  // Particles come from a pool and are capped, so busy scenes stay smooth.
+  var pool = [], MAXP = 360;
+  function spawn(x, y, vx, vy, life, max, sz, col, add, grav) { if (parts.length >= MAXP) return; var p = pool.pop() || {}; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = life; p.max = max; p.s = sz; p.col = col; p.add = add; p.g = grav || 0; parts.push(p); }
+  function burst(x, y, n, col, speed, life, size, add, grav) { if (parts.length > MAXP * 0.7) n = Math.ceil(n / 2); for (var i = 0; i < n; i++) { var a = Math.random() * 6.283, s = speed * (0.3 + Math.random() * 0.7); spawn(x, y, Math.cos(a) * s, Math.sin(a) * s, life * (0.6 + Math.random() * 0.4), life, size * (0.6 + Math.random() * 0.8), col, add, grav); } }
   function onEvents(g) {
     g.events.forEach(function (ev) {
       var cx = (ev.x + 0.5) * T, cy = (ev.y + 0.5) * T;
@@ -167,18 +170,18 @@
       else if (ev.t === 'power') { burst(cx, cy, 18, '255,240,140', T * 4, 0.6, T * 0.07, true); }
       else if (ev.t === 'pop' || ev.t === 'ko') { burst(cx, cy, 24, ev.t === 'ko' ? '255,255,255' : '220,170,255', T * 5, 0.8, T * 0.09, true); burst(cx, cy, 6, '230,230,240', T * 1.2, 1, T * 0.25, false, -T); }
       else if (ev.t === 'shield' || ev.t === 'bosshit') { rings.push({ x: cx, y: cy, life: 0.3, max: 0.3, col: '120,255,230' }); }
-      else if (ev.t === 'drop') { staticLayer = null; burst(cx, cy, 8, '190,200,220', T * 2, 0.6, T * 0.15, false, -T); }
+      else if (ev.t === 'drop') { if (staticLayer) { var sx2 = staticLayer.getContext('2d'); sx2.setTransform(dpr, 0, 0, dpr, 0, 0); sx2.fillStyle = 'rgba(0,20,10,0.35)'; rr(sx2, ev.x * T + T * 0.12, ev.y * T + T * 0.2, T, T, T * 0.2); sx2.fill(); drawWall(sx2, ev.x * T, ev.y * T, true); } burst(cx, cy, 8, '190,200,220', T * 2, 0.6, T * 0.15, false, -T); }
       else if (ev.t === 'portal') { burst(cx, cy, 30, '180,150,255', T * 4, 1, T * 0.08, true); }
     });
   }
   function showBanner(text, sub, dur) { banner = { text: text, sub: sub || '', t: 0, dur: dur || 2 }; }
   function frame(g, dt) {
     time += dt; if (!staticLayer || staticLayer.width !== Math.round(bw * dpr)) buildStatic(g);
-    var focus = g.players.filter(function (p) { return p.human && !p.bot; })[0] || g.players[0], tx = Math.max(0, Math.min(bw - vw, (focus.x + 0.5) * T - vw / 2)), ty = Math.max(0, Math.min(bh - vh, (focus.y + 0.5) * T - vh / 2));
+    var focus = g.players.filter(function (p) { return p.human && !p.bot && p.alive; })[0] || g.players.filter(function (p) { return p.alive; })[0] || g.players[0], tx = Math.max(0, Math.min(bw - vw, (focus.x + 0.5) * T - vw / 2)), ty = Math.max(0, Math.min(bh - vh, (focus.y + 0.5) * T - vh / 2));
     if (!camInit) { camX = tx; camY = ty; camInit = true; } else { var kk = Math.min(1, dt * 7); camX += (tx - camX) * kk; camY += (ty - camY) * kk; }
     var c = ctx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
     var sh = g.shake * g.shake * T * 0.3, ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh;
-    c.setTransform(dpr, 0, 0, dpr, (ox - camX) * dpr, (oy - camY) * dpr);
+    c.setTransform(dpr, 0, 0, dpr, Math.round((ox - camX) * dpr), Math.round((oy - camY) * dpr));
     c.drawImage(staticLayer, 0, 0, bw, bh);
     var x, y;
     if (g.portal) drawPortal(c, g.portal);
@@ -191,11 +194,12 @@
     // rings
     c.save(); c.globalCompositeOperation = 'lighter';
     rings = rings.filter(function (r) { r.life -= dt; if (r.life <= 0) return false; var k = 1 - r.life / r.max; c.strokeStyle = 'rgba(' + (r.col || '255,230,170') + ',' + (1 - k) + ')'; c.lineWidth = T * 0.15 * (1 - k); c.beginPath(); c.arc(r.x, r.y, T * (0.3 + k * 1.4), 0, 7); c.stroke(); return true; });
-    parts = parts.filter(function (p) {
-      p.life -= dt; if (p.life <= 0) return false; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; var k = p.life / p.max;
-      c.globalCompositeOperation = p.add ? 'lighter' : 'source-over'; c.fillStyle = 'rgba(' + p.col + ',' + (p.add ? k : k * 0.5) + ')'; c.beginPath(); c.arc(p.x, p.y, p.s * (p.add ? k : 2 - k), 0, 7); c.fill(); return true;
+    var keep = 0;
+    parts.forEach(function (p) {
+      p.life -= dt; if (p.life <= 0) { pool.push(p); return; } parts[keep++] = p; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; var k = p.life / p.max;
+      c.globalCompositeOperation = p.add ? 'lighter' : 'source-over'; c.fillStyle = 'rgba(' + p.col + ',' + (p.add ? k : k * 0.5) + ')'; c.beginPath(); c.arc(p.x, p.y, p.s * (p.add ? k : 2 - k), 0, 7); c.fill();
     });
-    if (parts.length > 700) parts.splice(0, parts.length - 700);
+    parts.length = keep;
     c.restore();
     // vignette and banner in screen space
     c.setTransform(dpr, 0, 0, dpr, 0, 0); var bw0 = bw, bh0 = bh; bw = vw; bh = vh;

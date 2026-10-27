@@ -6,5 +6,6 @@ Original family-friendly maze blasting game. All art drawn in code (canvas at de
 - Build: `node build.js` (writes site/). Test copy: `npm run testcopy` (writes /workspace/blast-maze-test.html)
 - Tests: `npm test` (unit, headless simulation, Playwright at 390x844 and 844x390 plus desktop keyboard, and the single-file copy)
 - Screenshots: `npm run shots` (shots/*.jpg)
+- v3 fixes the QA v2 minors and polish (win grammar, points explained, Easy vs Hard CPUs, camera after KO, frame time, bot to walled portal).
 - v2 fixes every item in QA report /workspace/qa/blast-maze-v1/REPORT.md (BLK-1, MAJ-1 to 4, MIN-1 to 7, POL-1 to 5).
 - Not on GitHub. Nothing is pushed until Tom approves.

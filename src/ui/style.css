@@ -48,7 +48,7 @@ body.landscape #stick{left:max(24px,env(safe-area-inset-left))}
 body.landscape #bombBtn{right:max(24px,env(safe-area-inset-right))}
 .dim{background:rgba(5,8,25,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .card{width:min(360px,92vw);background:linear-gradient(180deg,#2c3a7a,#1b2452);border-radius:22px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.2)}
-.card p{color:#d6e0ff;font-size:16px}
+.card p,#ovText{color:#d6e0ff;font-size:16px}
 @media (max-height:500px){h1{font-size:40px}h1 span{font-size:32px}.screen{gap:6px;padding:8px}.menu{gap:6px}button.big{min-height:52px;font-size:18px}.tag{display:none}#home{flex-direction:row;flex-wrap:wrap;gap:24px}#logoBot{display:none}.card{padding:12px}.card p{margin:6px 0}}
 body.touch:not(.landscape) #stage{flex:none;padding:10px 0}
 body.touch:not(.landscape) #pad{flex:1;height:auto;min-height:220px}
@@ -59,3 +59,12 @@ body.touch:not(.landscape) #pad{flex:1;height:auto;min-height:220px}
 #hudL,#hudM{gap:5px}
 #hudM{min-width:0}
 @media (max-width:420px){#hud{font-size:13px;padding:0 6px}.chip{padding:2px 5px}}
+.why{font-size:14px;margin:0 0 8px;color:#e8eeff;line-height:1.35}
+table.pts{width:100%;border-collapse:collapse;font-size:14px;margin:0 auto}
+table.pts th{font-size:11px;color:#a9b8e8;font-weight:600;padding:2px}
+table.pts td{padding:5px 3px;border-top:1px solid rgba(255,255,255,.08);text-align:center}
+table.pts td:first-child{text-align:left;white-space:nowrap}
+table.pts tr.top td{background:rgba(255,210,80,.14);color:#ffe9a8}
+.tally{font-size:13px;margin:8px 0 0;color:#bcd0ff}
+#ovText{display:block}
+#ovText{margin:10px 0 14px}

@@ -17,7 +17,7 @@
     $('best').textContent = data.best ? 'Best story score: ' + data.best : '';
   }
   function refreshMute() { [].forEach.call(document.querySelectorAll('.muteBtn'), function (b) { b.textContent = b.classList.contains('icon') ? (data.settings.muted ? '\u00d7' : '\u266b') : 'Sound: ' + (data.settings.muted ? 'Off' : 'On'); b.classList.toggle('on', !data.settings.muted && !b.classList.contains('icon')); }); A.setMuted(data.settings.muted); }
-  function overlay(title, text, btns) { $('ovTitle').textContent = title; $('ovText').textContent = text || ''; var box = $('ovBtns'); box.innerHTML = ''; btns.forEach(function (b) { var el = document.createElement('button'); el.textContent = b[0]; el.dataset.act = b[1]; if (b[2]) el.className = b[2]; box.appendChild(el); }); show('overlay'); }
+  function overlay(title, text, btns, html) { $('ovTitle').textContent = title; if (html) $('ovText').innerHTML = html; else $('ovText').textContent = text || ''; var box = $('ovBtns'); box.innerHTML = ''; btns.forEach(function (b) { var el = document.createElement('button'); el.textContent = b[0]; el.dataset.act = b[1]; if (b[2]) el.className = b[2]; box.appendChild(el); }); show('overlay'); }
   function save() { S.write(store, data); }
   // ---------- game start ----------
   function startStory(level, carry) {
@@ -31,14 +31,14 @@
     begin(E.newBattle({ humans: st.humans, cpus: st.cpus, difficulty: data.settings.difficulty, seed: (Date.now() % 100000) + round, wins: st.wins }));
     R.showBanner('Round ' + round, 'Last robot standing wins!', 2); A.music('main');
   }
-  function begin(g) { st.g = g; st.paused = false; st.handled = false; R.reset(); show('play'); layout(); updateHud(true); }
+  function begin(g) { st.zoomOut = false; st.g = g; st.paused = false; st.handled = false; R.reset(); show('play'); layout(); updateHud(true); }
   // ---------- layout ----------
   function layout() {
     var vw = root.innerWidth, vh = root.innerHeight, land = vw > vh; document.body.classList.toggle('landscape', land && touch);
     if (st.screen !== 'play' && st.screen !== 'overlay') return;
     var hud = 56, aw = vw - 12, ah = vh - hud - 12;
     if (touch && !land) ah -= 230; if (touch && land) aw = vw - 2 * 200;
-    R.resize(Math.max(150, aw), Math.max(130, ah), touch ? (land ? 30 : 36) : 0);
+    R.resize(Math.max(150, aw), Math.max(130, ah), touch && !st.zoomOut ? (land ? 30 : 36) : 0);
   }
   root.addEventListener('resize', layout); root.addEventListener('orientationchange', function () { setTimeout(layout, 200); });
   // ---------- HUD ----------
@@ -117,9 +117,18 @@
     } else {
       st.wins = g.players.map(function (p) { return p.wins; });
       var w = g.players.find(function (p) { return p.id === g.winner; }), champ = g.players.find(function (p) { return p.wins >= 2; });
-      if (champ) overlay(champ.name + ' wins the match!', g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), [['Play Again', 'again', 'big'], ['Home', 'home', 'back']]);
-      else overlay(w ? w.name + (g.onPoints ? ' wins on points!' : ' wins the round!') : "Time's up! It's a draw.", g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), [['Next Round', 'next', 'big'], ['Home', 'home', 'back']]);
+      var tally = g.players.map(function (p) { return p.name + ': ' + p.wins; }).join('   '), html = null;
+      if (g.onPoints || !w) html = pointsHtml(g, w) + '<p class="tally">Rounds won: ' + esc(tally) + '</p>';
+      if (champ) overlay(wins(champ.name) + (g.onPoints ? ' the match on points!' : ' the match!'), tally, [['Play Again', 'again', 'big'], ['Home', 'home', 'back']], html);
+      else overlay(w ? wins(w.name) + (g.onPoints ? ' on points!' : ' the round!') : "Time's up! It's a draw.", tally, [['Next Round', 'next', 'big'], ['Home', 'home', 'back']], html);
     }
+  }
+  function wins(name) { return name === 'You' ? 'You win' : name + ' wins'; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pointsHtml(g, w) {
+    var rows = g.players.slice().sort(function (a, b) { return b.pts - a.pts; }).map(function (p) {
+      return '<tr' + (w && p.id === w.id ? ' class="top"' : '') + '><td><i class="dot" style="background:' + p.color + ';color:' + p.color + '"></i> ' + esc(p.name) + '</td><td>' + p.kos + '</td><td>' + p.crates + '</td><td>' + p.ups + '</td><td><b>' + p.pts + '</b></td></tr>'; }).join('');
+    return '<p class="why">Nobody was left alone at the end, so we count points!<br>Knock out a robot = 100, break a crate = 10, grab a power-up = 20.</p><table class="pts"><tr><th></th><th>KOs</th><th>Crates</th><th>Power-ups</th><th>Points</th></tr>' + rows + '</table>';
   }
   function sounds(g) { g.events.forEach(function (ev) { var m = { place: 'place', boom: 'boom', crate: 'crate', power: 'power', kick: 'kick', shield: 'shield', pop: 'pop', ko: 'ko', win: 'win', lose: 'lose', portal: 'portal', bosshit: 'bosshit', draw: 'lose' }[ev.t]; if (m) A.sfx(m); }); }
   // ---------- loop ----------
@@ -128,6 +137,7 @@
     requestAnimationFrame(loop); var dt = Math.min(0.1, (t - (lastT || t)) / 1000); lastT = t; st.frames++;
     var g = st.g; if (!g || (st.screen !== 'play' && st.screen !== 'overlay')) return;
     if (!st.paused) { acc += dt; var n = 0; while (acc >= STEP && n++ < 6) { E.step(g, inputs(), STEP); R.onEvents(g); sounds(g); acc -= STEP; } if (acc > STEP) acc = 0; }
+    if (touch && !st.zoomOut && g.mode === 'battle' && !g.players.some(function (p) { return p.human && p.alive; }) && g.players.some(function (p) { return p.human && p.deadT > 0.8; })) { st.zoomOut = true; layout(); }
     R.frame(g, st.paused ? 0 : dt); updateHud(); outcome();
   }
   // ---------- init ----------

@@ -1,9 +1,10 @@
+// Label commit = last commit that changed src/ or build.js (so docs and screenshot commits do not change it).
 // Build: concatenates src/ into site/index.html (PWA) with sw.js, version.json, manifest, icons.
 // BM_SINGLE=<file> also writes a single-file test copy (no service worker).
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), { execSync } = require('child_process');
 const r = f => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
 const VERSION = 2, DATE = 'Oct 26';
-let commit = process.env.COMMIT || ''; if (!commit) { try { commit = execSync('git rev-parse HEAD', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (e) { commit = 'local00'; } }
+let commit = process.env.COMMIT || ''; if (!commit) { try { commit = execSync('git log -1 --format=%H -- src build.js', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (e) { commit = 'local00'; } }
 const LABEL = 'v' + VERSION + ' - ' + DATE + ' - ' + commit.slice(0, 7);
 const scripts = ['engine.js', 'save.js', 'audio.js', 'render.js', 'ui/ui.js'];
 const id = crypto.createHash('sha1').update(scripts.map(r).join('') + r('ui/style.css') + r('ui/body.html') + LABEL).digest('hex').slice(0, 8);

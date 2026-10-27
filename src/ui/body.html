@@ -1,0 +1,42 @@
+<div id="app">
+  <section id="home" class="screen">
+    <div class="logo"><canvas id="logoBot"></canvas><h1>Blast<span>Maze</span></h1><p class="tag">Break crates. Grab power-ups. Outsmart the bots.</p></div>
+    <div class="menu">
+      <button data-act="continue" id="btnContinue" class="big hidden">Continue</button>
+      <button data-act="story" class="big">Story Mode</button>
+      <button data-act="battle" class="big alt">Battle Mode</button>
+      <div class="row" id="diffRow"><button data-act="diff" data-v="easy">Easy</button><button data-act="diff" data-v="medium">Medium</button><button data-act="diff" data-v="hard">Hard</button></div>
+      <div class="row"><button data-act="help">How to Play</button><button data-act="mute" class="muteBtn">Sound: On</button></div>
+    </div>
+    <p id="best"></p>
+    <p id="ver"></p>
+  </section>
+  <section id="battleSetup" class="screen hidden">
+    <h2>Battle Mode</h2>
+    <p>Last robot standing wins the round. First to 2 rounds wins the match.</p>
+    <h3>Players on this device</h3>
+    <div class="row"><button data-act="humans" data-v="1">1 Player</button><button data-act="humans" data-v="2">2 Players</button></div>
+    <p class="note" id="twoNote">2 players share one keyboard: Player 1 uses W A S D and Space, Player 2 uses the arrow keys and Enter.</p>
+    <h3>Computer robots</h3>
+    <div class="row"><button data-act="cpus" data-v="1">1</button><button data-act="cpus" data-v="2">2</button><button data-act="cpus" data-v="3">3</button></div>
+    <div class="row"><button data-act="home" class="back">Back</button><button data-act="startBattle" class="big">Start</button></div>
+  </section>
+  <section id="help" class="screen hidden">
+    <h2>How to Play</h2>
+    <ul class="help">
+      <li>Drop a bomb. It goes off in a plus shape and breaks crates.</li>
+      <li>Bombs can set off other bombs. Stay out of the line!</li>
+      <li>Story: clear every critter, then step on the glowing portal.</li>
+      <li>Phone: drag the left stick to move, tap the big button to drop a bomb.</li>
+      <li>Keyboard: arrows or W A S D to move, Space to drop, P to pause.</li>
+    </ul>
+    <div class="powers" id="powerList"></div>
+    <button data-act="home" class="back big">Back</button>
+  </section>
+  <section id="play" class="screen hidden">
+    <div id="hud"><div id="hudL"></div><div id="hudM"></div><div id="hudR"><button data-act="mute" class="icon muteBtn" aria-label="Sound">&#9835;</button><button data-act="pause" class="icon" aria-label="Pause">II</button></div></div>
+    <div id="stage"><canvas id="cv"></canvas></div>
+    <div id="pad"><div id="stick"><div id="knob"></div></div><button id="bombBtn" aria-label="Drop bomb"><span></span></button></div>
+  </section>
+  <section id="overlay" class="screen dim hidden"><div class="card"><h2 id="ovTitle"></h2><p id="ovText"></p><div id="ovBtns" class="col"></div></div></section>
+</div>

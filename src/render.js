@@ -74,9 +74,9 @@
     c.save(); c.globalCompositeOperation = 'lighter';
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
       var f = g.flames[y][x]; if (f <= 0) continue; var k = f / E.FLAME_TIME, cx = (x + 0.5) * T, cy = (y + 0.5) * T, s = Math.sin(k * Math.PI);
-      var gl = c.createRadialGradient(cx, cy, 0, cx, cy, T * 1.1); gl.addColorStop(0, 'rgba(255,170,60,' + 0.5 * s + ')'); gl.addColorStop(1, 'rgba(255,80,0,0)'); c.fillStyle = gl; c.fillRect(cx - T * 1.1, cy - T * 1.1, T * 2.2, T * 2.2);
+      var gl = c.createRadialGradient(cx, cy, 0, cx, cy, T * 1.1); gl.addColorStop(0, 'rgba(255,110,20,' + 0.45 * s + ')'); gl.addColorStop(1, 'rgba(255,80,0,0)'); c.fillStyle = gl; c.fillRect(cx - T * 1.1, cy - T * 1.1, T * 2.2, T * 2.2);
       var hor = (g.flames[y][x - 1] > 0) || (g.flames[y][x + 1] > 0), ver = (g.flames[y - 1] && g.flames[y - 1][x] > 0) || (g.flames[y + 1] && g.flames[y + 1][x] > 0);
-      [[0.5, 'rgba(255,90,20,0.85)'], [0.36, 'rgba(255,200,60,0.95)'], [0.18, 'rgba(255,255,230,1)']].forEach(function (L) {
+      [[0.5, 'rgba(230,50,0,0.75)'], [0.38, 'rgba(255,120,10,0.8)'], [0.24, 'rgba(255,200,60,0.85)'], [0.1, 'rgba(255,255,220,1)']].forEach(function (L) {
         var w = T * L[0] * (0.6 + 0.4 * s) * (0.92 + Math.sin(time * 40 + x * 3 + y) * 0.08); c.fillStyle = L[1];
         if (hor || !ver) { rr(c, x * T - 1, cy - w, T + 2, w * 2, w * 0.9); c.fill(); }
         if (ver) { rr(c, cx - w, y * T - 1, w * 2, T + 2, w * 0.9); c.fill(); }

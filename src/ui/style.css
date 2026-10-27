@@ -83,3 +83,7 @@ button.on{background:linear-gradient(180deg,#8af0a8 0%,#3cc46d 45%,#24a85a 100%)
 #stick{background:radial-gradient(circle,rgba(255,255,255,.16),rgba(255,255,255,.05) 70%);box-shadow:inset 0 0 0 3px rgba(255,255,255,.22),inset 0 6px 18px rgba(0,0,0,.35)}
 #btnCalm{width:min(340px,92vw)}
 @media (prefers-reduced-motion:reduce){button{transition:none}}
+button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
+#bombBtn span{background:radial-gradient(circle at 38% 34%,#fff 0,#9ff3ff 22%,#2b8fe8 60%,#1b3f8f 100%);box-shadow:0 0 0 4px #1d1830,0 0 18px rgba(120,230,255,.8)}
+#bombBtn span:before{content:"";position:absolute;left:-4px;right:-4px;top:50%;height:10px;margin-top:-5px;border-radius:5px;background:linear-gradient(180deg,#eef2fb,#7c86a3);box-shadow:0 0 0 2px #1d1830}
+#bombBtn span:after{display:none}

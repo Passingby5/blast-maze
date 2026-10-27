@@ -16,7 +16,7 @@
     [].forEach.call(document.querySelectorAll('[data-act=diff]'), function (b) { b.classList.toggle('on', b.dataset.v === data.settings.difficulty); });
     $('best').textContent = data.best ? 'Best story score: ' + data.best : '';
   }
-  function refreshCalm() { var b = document.getElementById('btnCalm'); if (b) { b.textContent = 'Screen shake: ' + (data.settings.calm ? 'Off' : 'On'); b.classList.toggle('on', !data.settings.calm); } R.setReduceMotion(data.settings.calm); }
+  function refreshCalm() { var b = document.getElementById('btnCalm'); var sys = R.systemReduce(); if (b) { b.textContent = sys ? 'Screen shake: Off (reduced motion)' : 'Screen shake: ' + (data.settings.calm ? 'Off' : 'On'); b.disabled = sys; b.title = sys ? 'Your device asks for reduced motion, so shaking stays off.' : ''; b.classList.toggle('on', !sys && !data.settings.calm); } R.setReduceMotion(data.settings.calm); }
   function refreshMute() { [].forEach.call(document.querySelectorAll('.muteBtn'), function (b) { b.textContent = b.classList.contains('icon') ? (data.settings.muted ? '\u00d7' : '\u266b') : 'Sound: ' + (data.settings.muted ? 'Off' : 'On'); b.classList.toggle('on', !data.settings.muted && !b.classList.contains('icon')); }); A.setMuted(data.settings.muted); }
   function overlay(title, text, btns, html) { $('ovTitle').textContent = title; if (html) $('ovText').innerHTML = html; else $('ovText').textContent = text || ''; var box = $('ovBtns'); box.innerHTML = ''; btns.forEach(function (b) { var el = document.createElement('button'); el.textContent = b[0]; el.dataset.act = b[1]; if (b[2]) el.className = b[2]; box.appendChild(el); }); show('overlay'); }
   function save() { S.write(store, data); }
@@ -130,7 +130,7 @@
   function pointsHtml(g, w) {
     var rows = g.players.slice().sort(function (a, b) { return b.pts - a.pts; }).map(function (p) {
       return '<tr' + (w && p.id === w.id ? ' class="top"' : '') + '><td><i class="dot" style="background:' + p.color + ';color:' + p.color + '"></i> ' + esc(p.name) + '</td><td>' + p.kos + '</td><td>' + p.crates + '</td><td>' + p.ups + '</td><td><b>' + p.pts + '</b></td></tr>'; }).join('');
-    return '<p class="why">Nobody was left alone at the end, so we count points!<br>Knock out a robot = 100, break a crate = 10, grab a power-up = 20.</p><table class="pts"><tr><th></th><th>KOs</th><th>Crates</th><th>Power-ups</th><th>Points</th></tr>' + rows + '</table>';
+    return '<p class="why">' + (g.timeLeft <= 0 ? 'Time\'s up! More than one robot was still standing, so we count points!' : 'Nobody was left standing alone, so we count points!') + '<br>Knock out a robot = 100, break a crate = 10, grab a power-up = 20.</p><table class="pts"><tr><th></th><th>KOs</th><th>Crates</th><th>Power-ups</th><th>Points</th></tr>' + rows + '</table>';
   }
   function sounds(g) { g.events.forEach(function (ev) { var m = { place: 'place', boom: 'boom', crate: 'crate', power: 'power', kick: 'kick', shield: 'shield', pop: 'pop', ko: 'ko', win: 'win', lose: 'lose', portal: 'portal', bosshit: 'bosshit', draw: 'lose' }[ev.t]; if (m) A.sfx(m); }); }
   // ---------- loop ----------

@@ -56,3 +56,8 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 
 ### Added in v4 (graphics upgrade, rules unchanged)
 37. Modern 2D look with the same game rules, levels and save format: original rounded robots with outlines, shading, blinking eyes and idle/walk/squash animation; 4 level themes (meadow, desert, ice, volcano) with varied floor tiles, ambient occlusion and beveled walls; wooden crates with metal corners and flying debris; pulsing bombs with a burning fuse; glowing additive blasts; glossy bobbing power-ups with a shine; a polished boss with an HP pip bar; nicer HUD, buttons and banners. Static layers and sprites are pre-rendered per tile size and DPR. "Screen shake: On/Off" on How to Play (also off when the device asks for reduced motion) is saved in settings.calm. (browser, perf, screenshots 1-6)
+
+### Added in v5 (from QA v4, art and UI only)
+38. Original player/CPU design ("Boxbot"): rounded-square head with two camera-lens eyes, a light bar on top (no antenna), swept ear fins, colored mitten hands and boots. Bombs are caged energy orbs (no fuse) whose glow shifts from cyan to orange and red as they count down; the bomb button and Extra Bomb icon match. (screenshot 7-player-closeup.jpg)
+39. When the device asks for reduced motion, the shake button reads "Screen shake: Off (reduced motion)" and is disabled. A timed-out points win says "Time's up!". The level banner is a compact strip at the top of the board and fades within 1.6 s. Slow frames switch to lighter effects (fewer particles, no shine sweep); robot bodies are cached sprites. (browser, perf)
+

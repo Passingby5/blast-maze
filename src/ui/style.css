@@ -68,3 +68,18 @@ table.pts tr.top td{background:rgba(255,210,80,.14);color:#ffe9a8}
 .tally{font-size:13px;margin:8px 0 0;color:#bcd0ff}
 #ovText{display:block}
 #ovText{margin:10px 0 14px}
+/* v4 polish: richer panels, chips and buttons */
+#app{background:radial-gradient(ellipse at 50% -10%,#3b5bd1 0%,#1c2766 45%,#0b1026 100%)}
+#app:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.07;background-image:radial-gradient(circle at 25% 25%,#fff 2px,transparent 2.5px),radial-gradient(circle at 75% 75%,#fff 2px,transparent 2.5px);background-size:44px 44px}
+button{border-radius:18px;background:linear-gradient(180deg,#5d74c9 0%,#3d4f99 55%,#33427f 100%);text-shadow:0 1px 0 rgba(0,0,0,.35)}
+button.big{background:linear-gradient(180deg,#ffd06a 0%,#ffa531 45%,#f07a1a 100%)}
+button.alt{background:linear-gradient(180deg,#7fdcff 0%,#39a6ff 45%,#2a6fe0 100%)}
+button.on{background:linear-gradient(180deg,#8af0a8 0%,#3cc46d 45%,#24a85a 100%)}
+#hud{background:linear-gradient(180deg,rgba(28,38,92,.96),rgba(14,20,52,.88));border-bottom:2px solid rgba(255,255,255,.1);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.chip{background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.07));border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 4px rgba(0,0,0,.25);text-shadow:0 1px 0 rgba(0,0,0,.4)}
+.card{background:linear-gradient(180deg,#3a4ca0 0%,#2b3a85 40%,#1a2350 100%);border:2px solid rgba(255,255,255,.14)}
+.card h2,#battleSetup h2,#help h2{background:linear-gradient(180deg,#fff6c8,#ffb43a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 0 #7a2c10)}
+#cv{border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.12),0 0 0 6px rgba(0,0,0,.25)}
+#stick{background:radial-gradient(circle,rgba(255,255,255,.16),rgba(255,255,255,.05) 70%);box-shadow:inset 0 0 0 3px rgba(255,255,255,.22),inset 0 6px 18px rgba(0,0,0,.35)}
+#btnCalm{width:min(340px,92vw)}
+@media (prefers-reduced-motion:reduce){button{transition:none}}

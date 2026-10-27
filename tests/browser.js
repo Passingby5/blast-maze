@@ -24,7 +24,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     // mute toggle persists
     await tap('#home .muteBtn'); assert.strictEqual((await S()).muted, true); assert(/Off/.test(await page.textContent('#home .muteBtn'))); await tap('#home .muteBtn'); assert.strictEqual((await S()).muted, false); ok(vp.name + ' mute toggle');
     // help page
-    await tap('[data-act=help]'); assert.strictEqual(await page.locator('#powerList canvas').count(), 5); await layout('help'); await tap('#help [data-act=home]'); ok(vp.name + ' how to play lists 5 power-ups');
+    await tap('[data-act=help]'); assert.strictEqual(await page.locator('#powerList canvas').count(), 5); await layout('help'); await tap('#btnCalm'); let cm = await S(); assert.strictEqual(cm.save.settings.calm, true); assert.strictEqual(cm.render.reduceMotion, true); await tap('#btnCalm'); cm = await S(); assert.strictEqual(cm.save.settings.calm, false); await tap('#help [data-act=home]'); ok(vp.name + ' how to play lists 5 power-ups; screen shake toggle saves');
     // difficulty
     await tap('[data-act=diff][data-v=easy]'); assert.strictEqual((await S()).save.settings.difficulty, 'easy'); await tap('[data-act=diff][data-v=medium]'); ok(vp.name + ' difficulty select');
     // double tap debounced: story starts once

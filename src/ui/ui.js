@@ -16,6 +16,7 @@
     [].forEach.call(document.querySelectorAll('[data-act=diff]'), function (b) { b.classList.toggle('on', b.dataset.v === data.settings.difficulty); });
     $('best').textContent = data.best ? 'Best story score: ' + data.best : '';
   }
+  function refreshCalm() { var b = document.getElementById('btnCalm'); if (b) { b.textContent = 'Screen shake: ' + (data.settings.calm ? 'Off' : 'On'); b.classList.toggle('on', !data.settings.calm); } R.setReduceMotion(data.settings.calm); }
   function refreshMute() { [].forEach.call(document.querySelectorAll('.muteBtn'), function (b) { b.textContent = b.classList.contains('icon') ? (data.settings.muted ? '\u00d7' : '\u266b') : 'Sound: ' + (data.settings.muted ? 'Off' : 'On'); b.classList.toggle('on', !data.settings.muted && !b.classList.contains('icon')); }); A.setMuted(data.settings.muted); }
   function overlay(title, text, btns, html) { $('ovTitle').textContent = title; if (html) $('ovText').innerHTML = html; else $('ovText').textContent = text || ''; var box = $('ovBtns'); box.innerHTML = ''; btns.forEach(function (b) { var el = document.createElement('button'); el.textContent = b[0]; el.dataset.act = b[1]; if (b[2]) el.className = b[2]; box.appendChild(el); }); show('overlay'); }
   function save() { S.write(store, data); }
@@ -85,6 +86,7 @@
       case 'cpus': st.cpus = Math.min(+v, 4 - st.humans); setupRefresh(); break;
       case 'startBattle': startBattle(1); break;
       case 'diff': data.settings.difficulty = v; save(); refreshHome(); break;
+      case 'calm': data.settings.calm = !data.settings.calm; save(); refreshCalm(); break;
       case 'mute': data.settings.muted = !data.settings.muted; save(); refreshMute(); break;
       case 'help': show('help'); break;
       case 'home': st.g = null; st.paused = false; show('home'); break;
@@ -142,7 +144,7 @@
   }
   // ---------- init ----------
   $('ver').textContent = BM_BUILD.label;
-  R.setup($('cv')); R.drawIcon($('logoBot'), 'robot', 84);
+  R.setup($('cv')); refreshCalm(); R.drawIcon($('logoBot'), 'robot', 84);
   var names = { bomb: 'Extra Bomb', fire: 'Bigger Blast', speed: 'Speed', kick: 'Kick', shield: 'Shield' };
   E.POWERS.forEach(function (k) { var d = document.createElement('div'), c = document.createElement('canvas'); R.drawIcon(c, k, 34); d.appendChild(c); d.appendChild(document.createTextNode(names[k])); $('powerList').appendChild(d); });
   refreshMute(); show('home'); requestAnimationFrame(loop);

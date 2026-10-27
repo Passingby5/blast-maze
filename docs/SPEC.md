@@ -53,3 +53,6 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 34. After you are knocked out in a phone battle, the view zooms out to show the whole board. (browser)
 35. Busy scenes (4 robots, 8 bombs each, range 8, and sudden death) run with p99 frame time under 25 ms at DPR 3. Particles are pooled and capped at 360. Dropped blocks are painted into the cached layer instead of rebuilding it. (tests/perf.js)
 36. The test bot blasts crates to reach a portal that is walled in. (unit)
+
+### Added in v4 (graphics upgrade, rules unchanged)
+37. Modern 2D look with the same game rules, levels and save format: original rounded robots with outlines, shading, blinking eyes and idle/walk/squash animation; 4 level themes (meadow, desert, ice, volcano) with varied floor tiles, ambient occlusion and beveled walls; wooden crates with metal corners and flying debris; pulsing bombs with a burning fuse; glowing additive blasts; glossy bobbing power-ups with a shine; a polished boss with an HP pip bar; nicer HUD, buttons and banners. Static layers and sprites are pre-rendered per tile size and DPR. "Screen shake: On/Off" on How to Play (also off when the device asks for reduced motion) is saved in settings.calm. (browser, perf, screenshots 1-6)

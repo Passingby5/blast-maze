@@ -1,4 +1,4 @@
 { "name": "blast-maze", "version": "1.0.0", "private": true,
   "scripts": { "build": "node build.js", "testcopy": "BM_SINGLE=/workspace/blast-maze-test.html node build.js",
     "test": "node tests/unit.js && node tests/sim.js && node tests/difficulty.js && BM_SINGLE=/workspace/blast-maze-test.html node build.js && node tests/browser.js && node tests/perf.js && node tests/browser.js file:///workspace/blast-maze-test.html",
-    "shots": "node build.js && SHOTS=shots node tests/browser.js && node tools/bossshot.js shots/6-boss.jpg && node tools/playershot.js shots/7-player-closeup.jpg" } }
+    "shots": "node build.js && SHOTS=shots node tests/browser.js && node tools/bossshot.js shots/6-boss.jpg && node tools/playershot.js shots/7-player-closeup.jpg && node tools/smallshot.js shots/8-small-phone-320.jpg && node tools/smallshot.js shots/9-small-phone-360.jpg 360 640" } }

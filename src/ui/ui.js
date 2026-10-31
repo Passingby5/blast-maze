@@ -32,7 +32,7 @@
     begin(E.newBattle({ humans: st.humans, cpus: st.cpus, difficulty: data.settings.difficulty, seed: (Date.now() % 100000) + round, wins: st.wins }));
     R.showBanner('Round ' + round, 'Last robot standing wins!', 2); A.music('main');
   }
-  function begin(g) { st.zoomOut = false; st.g = g; st.paused = false; st.handled = false; R.reset(); show('play'); layout(); updateHud(true); }
+  function begin(g) { asst = [{}, {}]; st.zoomOut = false; st.g = g; st.paused = false; st.handled = false; R.reset(); show('play'); layout(); updateHud(true); }
   // ---------- layout ----------
   function layout() {
     var vw = root.innerWidth, vh = root.innerHeight, land = vw > vh; document.body.classList.toggle('landscape', land && touch);
@@ -75,7 +75,34 @@
   pad.addEventListener('pointerup', padUp); pad.addEventListener('pointercancel', padUp); pad.addEventListener('lostpointercapture', padUp);
   pad.addEventListener('contextmenu', function (e) { e.preventDefault(); }); $('bombBtn').addEventListener('contextmenu', function (e) { e.preventDefault(); });
   $('bombBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); A.init(); bombQ[0] = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) { } });
-  function inputs() { var out = [0, 1].map(function (i) { var a = keys[i], d = a.length ? a[a.length - 1] : null; if (i === 0 && stickDir) d = stickDir; var o = { dir: d, bomb: bombQ[i] }; bombQ[i] = false; return o; }); return out; }
+  // Steering assist (controller layer only; the engine and CPU robots are unchanged). For human players:
+  // - late turn: a perpendicular press up to 0.3 tile after passing an opening steps back and takes the turn;
+  // - early tap buffer: a perpendicular tap released up to 150 ms before reaching an opening still turns there;
+  // - corner assist: holding toward a wall keeps sliding forward if the opening is the very next tile.
+  var DV = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }, OPPD = { u: 'd', d: 'u', l: 'r', r: 'l' }, LATE = 0.3, BUF = 0.15;
+  var asst = [{}, {}], tick = 0;
+  function perp(a, b) { return a && b && (DV[a][0] === 0) !== (DV[b][0] === 0); }
+  function openAt(g, p, x, y) { if (x < 0 || y < 0 || x >= E.W || y >= E.H || g.map[y][x] !== E.FLOOR) return false; for (var i = 0; i < g.bombs.length; i++) { var b = g.bombs[i]; if (b.x === x && b.y === y && p.passBomb !== b.id) return false; } return true; }
+  function assist(g, p, want, S) {
+    if (!p || !p.alive) { S.snap = null; return want; }
+    if (S.prev && S.prev !== want) { S.buf = S.prev; S.bufT = tick; } S.prev = want; var m = p.dir;
+    if (S.snap) { var sn = S.snap; if (want !== sn.d || tick - sn.t > 0.4) S.snap = null; else if (p.x === sn.x && p.y === sn.y) { S.snap = null; return sn.d; } else if (p.tx === sn.x && p.ty === sn.y) return sn.d; else return OPPD[m] || want; }
+    if (want && m && perp(want, m)) {
+      var w = DV[want], v = DV[m], cx = p.tx - v[0], cy = p.ty - v[1], past = Math.abs(p.x - cx) + Math.abs(p.y - cy);
+      if (openAt(g, p, p.tx + w[0], p.ty + w[1])) return want;
+      if (past <= LATE && openAt(g, p, cx, cy) && openAt(g, p, cx + w[0], cy + w[1])) { S.snap = { d: want, x: cx, y: cy, t: tick }; return OPPD[m]; }
+      if (openAt(g, p, p.tx + v[0], p.ty + v[1]) && openAt(g, p, p.tx + v[0] + w[0], p.ty + v[1] + w[1])) return m;
+      return want;
+    }
+    if (want && !m && p.x === p.tx && p.y === p.ty && S.last && perp(want, S.last)) {
+      var w2 = DV[want], v2 = DV[S.last];
+      if (!openAt(g, p, p.tx + w2[0], p.ty + w2[1]) && openAt(g, p, p.tx + v2[0], p.ty + v2[1]) && openAt(g, p, p.tx + v2[0] + w2[0], p.ty + v2[1] + w2[1])) return S.last;
+    }
+    if (m) S.last = m;
+    if (!want && m && S.buf && perp(S.buf, m) && tick - S.bufT <= BUF) { var bd = DV[S.buf]; if (openAt(g, p, p.tx + bd[0], p.ty + bd[1])) return S.buf; }
+    return want;
+  }
+  function inputs() { tick += 1 / 60; var g = st.g, hum = g ? g.players.filter(function (p) { return p.human; }) : []; var out = [0, 1].map(function (i) { var a = keys[i], d = a.length ? a[a.length - 1] : null; if (i === 0 && stickDir) d = stickDir; if (g && hum[i]) d = assist(g, hum[i], d, asst[i]); var o = { dir: d, bomb: bombQ[i] }; bombQ[i] = false; return o; }); return out; }
   // ---------- buttons (debounced) ----------
   var lastTap = 0;
   document.addEventListener('click', function (e) {

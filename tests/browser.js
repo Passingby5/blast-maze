@@ -144,5 +144,34 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
   await page.evaluate(() => localStorage.setItem('blastmaze_save', '{"v":2,"story":{"level":1,"difficulty":"easy","carry":{"bombs":2,"range":-5,"speedUps":99,"lives":0,"kick":false,"shield":0,"score":0}}}')); await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(300);
   await page.click('#btnContinue'); await page.waitForTimeout(400); const pc = await page.evaluate(() => { const g = BM.UI.game(); return [g.players[0].range, g.players[0].speed, g.lives]; }); assert.deepStrictEqual(pc, [1, 5.2, 1]); ok('MAJ-1 bad saves rejected, out-of-range values clamped');
   assert.deepStrictEqual(errors, []); await ctx.close();
+  // v7 MAJ-1: D-pad and bomb button never overlap (each other, the board or the screen edge) on common phone sizes
+  for (const [w, h] of [[320, 568], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932], [568, 320], [640, 360], [667, 375], [844, 390], [915, 412]]) {
+    const c2 = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }), pg = await c2.newPage();
+    await pg.goto(base, { waitUntil: 'load' }); await pg.waitForTimeout(250); await pg.tap('[data-act=story]'); await pg.waitForTimeout(500);
+    const g = await pg.evaluate(() => { const b = s => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; }; return { pad: b('#dpad'), bomb: b('#bombBtn'), cv: b('#cv'), arms: [...document.querySelectorAll('#dpad .arm')].map(a => a.getBoundingClientRect().width) }; });
+    const hit = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b, minArm = w < 360 && h > w ? 48 : 56;
+    assert(!hit(g.pad, g.bomb) && g.bomb.l - g.pad.r >= 8, w + 'x' + h + ' pad/bomb overlap ' + JSON.stringify(g));
+    assert(!hit(g.pad, g.cv) && !hit(g.bomb, g.cv), w + 'x' + h + ' controls overlap board');
+    assert(g.pad.l >= 0 && g.bomb.r <= w && g.pad.b <= h && g.bomb.b <= h, w + 'x' + h + ' controls off screen');
+    assert(Math.min(...g.arms) >= minArm, w + 'x' + h + ' arms ' + g.arms[0]);
+    ok(w + 'x' + h + ' D-pad (arms ' + Math.round(g.arms[0]) + ' px) and bomb (' + Math.round(g.bomb.w) + ' px) do not overlap; gap ' + Math.round(g.bomb.l - g.pad.r) + ' px'); await c2.close();
+  }
+  // v7 POL-1: steering assist (late turn, corner assist, early tap buffer). Row 1 open; only column 3 leads down.
+  {
+    const c3 = await browser.newContext({ viewport: { width: 1280, height: 800 } }), pg = await c3.newPage();
+    await pg.goto(base, { waitUntil: 'load' }); await pg.waitForTimeout(250); await pg.click('[data-act=story]'); await pg.waitForTimeout(2600);
+    const setup = (x, tx) => pg.evaluate(([x, tx]) => { const g = BM.UI.game(), p = g.players[0]; g.enemies.forEach(e => { e.speed = 0.0001; }); g.bombs = []; p.inv = 999;
+      for (let i = 1; i < 14; i++) { g.map[1][i] = 0; g.items[1][i] = null; g.map[2][i] = i === 3 ? 0 : 1; } g.map[3][3] = 0; p.x = x; p.tx = tx; p.y = p.ty = 1; p.dir = 'r'; p.face = 'r'; }, [x, tx]);
+    const pos = () => pg.evaluate(() => { const p = BM.UI.game().players[0]; return [p.x, p.y]; });
+    await setup(3.2, 4); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(450); await pg.keyboard.up('ArrowDown'); let q = await pos(); assert(q[0] === 3 && q[1] > 1.5, 'late turn 0.2 tile past opening: ' + q);
+    ok('steering: Down pressed 0.2 tile after passing an opening still takes the turn');
+    await setup(3.45, 4); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(450); await pg.keyboard.up('ArrowDown'); q = await pos(); assert(q[1] === 1, 'too late should not turn: ' + q);
+    ok('steering: a press well past the opening (0.45 tile) does not snap back');
+    await setup(1.6, 2); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(600); await pg.keyboard.up('ArrowDown'); q = await pos(); assert(q[0] === 3 && q[1] > 1.5, 'corner assist: ' + q);
+    ok('steering: holding Down against a wall slides on into the opening one tile ahead');
+    await setup(2.75, 3); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(16); await pg.keyboard.up('ArrowDown'); await pg.waitForTimeout(450); q = await pos(); assert(q[0] === 3 && q[1] > 1.5, 'tap buffer: ' + q);
+    ok('steering: a quick Down tap just before the opening is buffered and turns');
+    await c3.close();
+  }
   await browser.close(); if (server) server.close(); console.log('browser tests passed:', passed);
 })().catch(e => { console.error(e); process.exit(1); });

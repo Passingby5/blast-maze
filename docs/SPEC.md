@@ -64,3 +64,8 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 ### Added in v6 (from owner feedback)
 40. Touch D-pad on the left in portrait and landscape: four arrow arms in a cross, each at least 56 x 56 px. Press and hold moves continuously; sliding a finger to another arm switches direction without lifting (direction comes from the finger's position over the pad); with two fingers on the pad the last pressed wins; the pressed arm lights up and sinks a little. Holding the D-pad while tapping the bomb button works. No text selection or long-press menus. Keyboard controls are unchanged. The level banner moves to the bottom of the board when the player starts in the top half, so it never covers the player. (browser, real multi-touch; screenshots 2-gameplay-blast.jpg and 4-landscape-battle.jpg)
 
+### Added in v7 (from QA v6)
+41. The D-pad and bomb button scale with screen width, so they never overlap each other, the board or the screen edge from 320 to 430 px wide in portrait and in landscape. D-pad arms are at least 56 px (58 px at 320 wide). (browser: 11 phone sizes)
+42. Steering assist for human players, in the controller only (engine and CPU robots unchanged). A turn pressed up to 0.3 tile after passing an opening steps back and takes it. Holding toward a wall keeps sliding forward when the opening is the very next tile. A quick tap released up to 150 ms before reaching an opening still turns there. (browser)
+43. tests/perf.js ignores 30 warm-up frames and checks p95 < 20 ms, avg < 18 ms and at most 3 frames over 33 ms per 5 s scene, so a single hitch no longer fails it. (perf)
+

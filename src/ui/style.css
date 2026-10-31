@@ -94,3 +94,8 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
 #dpad .arm.on{background:linear-gradient(180deg,#ffd06a,#f07a1a);box-shadow:0 1px 0 #9a420a,inset 0 2px 4px rgba(0,0,0,.25);transform:translateY(3px)}
 body.landscape #dpad{pointer-events:auto;left:max(16px,env(safe-area-inset-left))}
 #pad,#bombBtn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+/* v7 responsive pad: arm size --a shrinks on narrow phones so the D-pad and bomb button never overlap */
+#pad{--a:min(64px,calc((100vw - 44px) / 4.75))}
+#dpad{left:max(14px,env(safe-area-inset-left));width:calc(var(--a) * 3);height:calc(var(--a) * 3);margin-top:calc(var(--a) * -1.5);grid-template:repeat(3,var(--a))/repeat(3,var(--a))}
+#bombBtn{right:max(14px,env(safe-area-inset-right));width:calc(var(--a) * 1.75);height:calc(var(--a) * 1.75);margin-top:calc(var(--a) * -0.875)}
+body.landscape #pad{--a:64px}

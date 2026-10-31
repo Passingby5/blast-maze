@@ -74,34 +74,30 @@
   function padUp(e) { if (!padPts[e.pointerId]) return; delete padPts[e.pointerId]; padRefresh(); }
   pad.addEventListener('pointerup', padUp); pad.addEventListener('pointercancel', padUp); pad.addEventListener('lostpointercapture', padUp);
   pad.addEventListener('contextmenu', function (e) { e.preventDefault(); }); $('bombBtn').addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  $('bombBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); A.init(); bombQ[0] = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) { } });
-  // Steering assist (controller layer only; the engine and CPU robots are unchanged). For human players:
-  // - late turn: a perpendicular press up to 0.3 tile after passing an opening steps back and takes the turn;
-  // - early tap buffer: a perpendicular tap released up to 150 ms before reaching an opening still turns there;
-  // - corner assist: holding toward a wall keeps sliding forward if the opening is the very next tile.
-  var DV = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }, OPPD = { u: 'd', d: 'u', l: 'r', r: 'l' }, LATE = 0.3, BUF = 0.15;
+  $('bombBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); var br = this.getBoundingClientRect(), rx = e.clientX - (br.left + br.width / 2), ry = e.clientY - (br.top + br.height / 2); if (e.clientX || e.clientY) { if (rx * rx + ry * ry > (br.width / 2) * (br.width / 2)) return; } A.init(); bombQ[0] = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) { } });
+  // Steering assist (controller layer only; the engine and CPU robots are unchanged). Kept deliberately simple and safe:
+  // the only help is a short tap buffer. If you tap a perpendicular direction and let go up to 150 ms before the robot
+  // reaches a tile where that way is open (and holds no blast or critter), the robot still turns there.
+  // The output direction is always either a direction you are pressing right now or that buffered tap. There is no
+  // snap-back, no automatic sliding and no move from a standstill that you did not press.
+  var DV = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }, BUF = 0.15;
   var asst = [{}, {}], tick = 0;
   function perp(a, b) { return a && b && (DV[a][0] === 0) !== (DV[b][0] === 0); }
-  function openAt(g, p, x, y) { if (x < 0 || y < 0 || x >= E.W || y >= E.H || g.map[y][x] !== E.FLOOR) return false; for (var i = 0; i < g.bombs.length; i++) { var b = g.bombs[i]; if (b.x === x && b.y === y && p.passBomb !== b.id) return false; } return true; }
+  function safeOpen(g, p, x, y) {
+    if (x < 0 || y < 0 || x >= E.W || y >= E.H || g.map[y][x] !== E.FLOOR || g.flames[y][x] > 0) return false;
+    for (var i = 0; i < g.bombs.length; i++) { var b = g.bombs[i]; if (b.x === x && b.y === y) return false; }
+    for (i = 0; i < g.enemies.length; i++) { var e = g.enemies[i]; if (e.alive && ((e.tx === x && e.ty === y) || (Math.round(e.x) === x && Math.round(e.y) === y))) return false; }
+    return true;
+  }
   function assist(g, p, want, S) {
-    if (!p || !p.alive) { S.snap = null; return want; }
-    if (S.prev && S.prev !== want) { S.buf = S.prev; S.bufT = tick; } S.prev = want; var m = p.dir;
-    if (S.snap) { var sn = S.snap; if (want !== sn.d || tick - sn.t > 0.4) S.snap = null; else if (p.x === sn.x && p.y === sn.y) { S.snap = null; return sn.d; } else if (p.tx === sn.x && p.ty === sn.y) return sn.d; else return OPPD[m] || want; }
-    if (want && m && perp(want, m)) {
-      var w = DV[want], v = DV[m], cx = p.tx - v[0], cy = p.ty - v[1], past = Math.abs(p.x - cx) + Math.abs(p.y - cy);
-      if (openAt(g, p, p.tx + w[0], p.ty + w[1])) return want;
-      if (past <= LATE && openAt(g, p, cx, cy) && openAt(g, p, cx + w[0], cy + w[1])) { S.snap = { d: want, x: cx, y: cy, t: tick }; return OPPD[m]; }
-      if (openAt(g, p, p.tx + v[0], p.ty + v[1]) && openAt(g, p, p.tx + v[0] + w[0], p.ty + v[1] + w[1])) return m;
-      return want;
-    }
-    if (want && !m && p.x === p.tx && p.y === p.ty && S.last && perp(want, S.last)) {
-      var w2 = DV[want], v2 = DV[S.last];
-      if (!openAt(g, p, p.tx + w2[0], p.ty + w2[1]) && openAt(g, p, p.tx + v2[0], p.ty + v2[1]) && openAt(g, p, p.tx + v2[0] + w2[0], p.ty + v2[1] + w2[1])) return S.last;
-    }
-    if (m) S.last = m;
-    if (!want && m && S.buf && perp(S.buf, m) && tick - S.bufT <= BUF) { var bd = DV[S.buf]; if (openAt(g, p, p.tx + bd[0], p.ty + bd[1])) return S.buf; }
+    if (S.prev && S.prev !== want) { S.buf = S.prev; S.bufT = tick; }
+    S.prev = want;
+    var m = p && p.alive ? p.dir : null;
+    if (S.buf && (tick - S.bufT > BUF || !m)) S.buf = null;
+    if (S.buf && (want === null || want === m) && perp(S.buf, m)) { var d = DV[S.buf]; if (safeOpen(g, p, p.tx + d[0], p.ty + d[1])) return S.buf; }
     return want;
   }
+  BM.UI_DEBUG = { pressed: function () { return { keys: keys[0].slice(), pad: stickDir, buf: asst[0].buf || null }; } };
   function inputs() { tick += 1 / 60; var g = st.g, hum = g ? g.players.filter(function (p) { return p.human; }) : []; var out = [0, 1].map(function (i) { var a = keys[i], d = a.length ? a[a.length - 1] : null; if (i === 0 && stickDir) d = stickDir; if (g && hum[i]) d = assist(g, hum[i], d, asst[i]); var o = { dir: d, bomb: bombQ[i] }; bombQ[i] = false; return o; }); return out; }
   // ---------- buttons (debounced) ----------
   var lastTap = 0;

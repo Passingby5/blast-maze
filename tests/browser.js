@@ -156,22 +156,63 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     assert(Math.min(...g.arms) >= minArm, w + 'x' + h + ' arms ' + g.arms[0]);
     ok(w + 'x' + h + ' D-pad (arms ' + Math.round(g.arms[0]) + ' px) and bomb (' + Math.round(g.bomb.w) + ' px) do not overlap; gap ' + Math.round(g.bomb.l - g.pad.r) + ' px'); await c2.close();
   }
-  // v7 POL-1: steering assist (late turn, corner assist, early tap buffer). Row 1 open; only column 3 leads down.
+  // v8 steering: only a short tap buffer; QA v7 MAJ-1/MAJ-2 repro cases and a random-press property test.
+  // Row 3 is open; above it only column 3 is open ((3,2)), so (4,3) has a pillar above it.
   {
-    const c3 = await browser.newContext({ viewport: { width: 1280, height: 800 } }), pg = await c3.newPage();
+    const c3 = await browser.newContext({ viewport: { width: 1280, height: 800 } }), pg = await c3.newPage(), errs = [];
+    pg.on('pageerror', e => errs.push(e.message));
     await pg.goto(base, { waitUntil: 'load' }); await pg.waitForTimeout(250); await pg.click('[data-act=story]'); await pg.waitForTimeout(2600);
-    const setup = (x, tx) => pg.evaluate(([x, tx]) => { const g = BM.UI.game(), p = g.players[0]; g.enemies.forEach(e => { e.speed = 0.0001; }); g.bombs = []; p.inv = 999;
-      for (let i = 1; i < 14; i++) { g.map[1][i] = 0; g.items[1][i] = null; g.map[2][i] = i === 3 ? 0 : 1; } g.map[3][3] = 0; p.x = x; p.tx = tx; p.y = p.ty = 1; p.dir = 'r'; p.face = 'r'; }, [x, tx]);
-    const pos = () => pg.evaluate(() => { const p = BM.UI.game().players[0]; return [p.x, p.y]; });
-    await setup(3.2, 4); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(450); await pg.keyboard.up('ArrowDown'); let q = await pos(); assert(q[0] === 3 && q[1] > 1.5, 'late turn 0.2 tile past opening: ' + q);
-    ok('steering: Down pressed 0.2 tile after passing an opening still takes the turn');
-    await setup(3.45, 4); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(450); await pg.keyboard.up('ArrowDown'); q = await pos(); assert(q[1] === 1, 'too late should not turn: ' + q);
-    ok('steering: a press well past the opening (0.45 tile) does not snap back');
-    await setup(1.6, 2); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(600); await pg.keyboard.up('ArrowDown'); q = await pos(); assert(q[0] === 3 && q[1] > 1.5, 'corner assist: ' + q);
-    ok('steering: holding Down against a wall slides on into the opening one tile ahead');
-    await setup(2.75, 3); await pg.keyboard.down('ArrowDown'); await pg.waitForTimeout(16); await pg.keyboard.up('ArrowDown'); await pg.waitForTimeout(450); q = await pos(); assert(q[0] === 3 && q[1] > 1.5, 'tap buffer: ' + q);
-    ok('steering: a quick Down tap just before the opening is buffered and turns');
-    await c3.close();
+    const setup = (x, tx, dir, extra) => pg.evaluate(([x, tx, dir, extra]) => { const g = BM.UI.game(), p = g.players[0]; g.enemies.forEach(e => { e.speed = 0.0001; e.x = e.tx = 13; e.y = e.ty = 11; }); g.bombs = []; p.inv = 0; p.alive = true;
+      for (let y = 0; y < 13; y++) for (let x2 = 0; x2 < 15; x2++) g.flames[y][x2] = 0;
+      for (let i = 1; i < 14; i++) { g.map[3][i] = 0; g.items[3][i] = null; g.map[2][i] = i === 3 ? 0 : 1; g.map[4][i] = 1; } g.map[1][3] = 0;
+      p.x = x; p.tx = tx; p.y = p.ty = 3; p.dir = dir; p.face = 'r';
+      if (extra === 'flame') g.flames[3][5] = 99; if (extra === 'enemy') { const e = g.enemies[0]; e.x = e.tx = 5; e.y = e.ty = 3; } }, [x, tx, dir, extra || '']);
+    const pl = () => pg.evaluate(() => { const p = BM.UI.game().players[0]; return { x: p.x, y: p.y, alive: p.alive }; });
+    // MAJ-1 S4: standing still at (4,3) under a pillar, hold UP with a blast or a critter on (5,3): nothing happens
+    for (const ex of ['flame', 'enemy', '']) { await setup(4, 4, null, ex); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(700); await pg.keyboard.up('ArrowUp'); const q = await pl(); assert(q.x === 4 && q.y === 3 && q.alive, 'S4 ' + ex + ' ' + JSON.stringify(q)); }
+    ok('QA v7 MAJ-1 S4: pushing Up into a pillar from a standstill does nothing (blast, critter or open floor beside)');
+    // MAJ-1 S3: moving right, release at 3.6, hold UP, blast on (5,3): stop at (4,3), alive
+    await setup(3.6, 4, 'r', 'flame'); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(700); await pg.keyboard.up('ArrowUp'); let q = await pl(); assert(q.x === 4 && q.y === 3 && q.alive, 'S3 ' + JSON.stringify(q));
+    ok('QA v7 MAJ-1 S3: holding Up while moving past a pillar stops safely next to a blast');
+    // MAJ-1 S4b: own bomb beside, push UP into pillar: stays put
+    await setup(4, 4, null); await pg.evaluate(() => { const g = BM.UI.game(); BM.Engine.placeBomb(g, g.players[0]); g.players[0].inv = 99; }); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(500); await pg.keyboard.up('ArrowUp'); q = await pl(); assert(q.x === 4 && q.y === 3, 'S4b ' + JSON.stringify(q));
+    await pg.evaluate(() => { BM.UI.game().bombs = []; }); ok('QA v7 MAJ-1 S4b: pushing Up next to your own bomb does not slide you away');
+    // MAJ-2 S5: hold RIGHT, tap UP 80 ms just past the opening: never moves left or down; keeps going right
+    for (const x0 of [3.08, 3.13]) { await setup(x0, 4, 'r'); await pg.keyboard.down('ArrowRight'); const xs = []; const t0 = Date.now(); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(80); await pg.keyboard.up('ArrowUp');
+      for (let i = 0; i < 8; i++) { await pg.waitForTimeout(50); xs.push(await pl()); } await pg.keyboard.up('ArrowRight');
+      assert(xs.every((p, i) => p.y <= 3 && (i === 0 || p.x >= xs[i - 1].x)), 'S5 ' + x0 + ' ' + JSON.stringify(xs)); assert(xs[xs.length - 1].x > 4, 'kept going right'); }
+    ok('QA v7 MAJ-2 S5: hold Right + tap Up just past an opening never backs up or goes down');
+    // early tap buffer still works
+    await setup(2.75, 3, 'r'); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(16); await pg.keyboard.up('ArrowUp'); await pg.waitForTimeout(450); q = await pl(); assert(q.x === 3 && q.y < 2.5, 'tap buffer ' + JSON.stringify(q));
+    ok('steering: a quick Up tap just before the opening is buffered and turns');
+    // Property test: random presses; every step's direction must be pressed now or a tap released <= 150 ms ago (perpendicular), never an unpressed reversal
+    const bad = await pg.evaluate(async () => {
+      const g = BM.UI.game(), p = g.players[0], E = BM.Engine, orig = E.step, log = [], keysDown = new Set(), rel = {};
+      p.inv = 1e9; g.enemies.forEach(e => { e.speed = 0.0001; }); for (let y = 1; y < 12; y++) for (let x = 1; x < 14; x++) if (g.map[y][x] === 2) g.map[y][x] = 0; p.x = p.tx = 1; p.y = p.ty = 1; p.dir = null;
+      const KEY = { u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight' }, OPP = { u: 'd', d: 'u', l: 'r', r: 'l' };
+      E.step = function (gg, inp, dt) { const before = gg.players[0].dir, out = inp[0].dir, now = performance.now(); const okDir = !out || keysDown.has(out) || (rel[out] && now - rel[out] < 260 && before && OPPd(out) !== before);
+        log.push({ out, before, okDir, pressed: [...keysDown] }); const r = orig.apply(this, arguments); const after = gg.players[0].dir; if (before && after === OPP[before] && !keysDown.has(after)) log.push({ rev: after, okDir: false }); return r; };
+      function OPPd(d) { return OPP[d]; }
+      let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      for (let i = 0; i < 160; i++) { const d = 'udlr'[Math.floor(rnd() * 4)], down = rnd() < 0.6;
+        if (down && !keysDown.has(d)) { keysDown.add(d); dispatchEvent(new KeyboardEvent('keydown', { code: KEY[d] })); } else if (!down && keysDown.has(d)) { keysDown.delete(d); rel[d] = performance.now(); dispatchEvent(new KeyboardEvent('keyup', { code: KEY[d] })); }
+        await new Promise(r => setTimeout(r, 20 + rnd() * 120)); }
+      for (const d of [...keysDown]) dispatchEvent(new KeyboardEvent('keyup', { code: KEY[d] }));
+      E.step = orig; return { steps: log.length, bad: log.filter(l => !l.okDir).slice(0, 5) };
+    });
+    assert(bad.steps > 300 && bad.bad.length === 0, 'property test ' + JSON.stringify(bad)); ok('steering property test: ' + bad.steps + ' steps of random presses, every direction pressed or a fresh tap, no unpressed reversal');
+    assert.deepStrictEqual(errs, []); await c3.close();
+  }
+  // POL-1: touches in the gap next to the bomb button do not drop a bomb (hit area = the visible circle)
+  {
+    const c4 = await browser.newContext({ viewport: { width: 320, height: 568 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }), pg = await c4.newPage();
+    await pg.goto(base, { waitUntil: 'load' }); await pg.waitForTimeout(250); await pg.tap('[data-act=story]'); await pg.waitForTimeout(2600);
+    const bb = await pg.locator('#bombBtn').boundingBox(), pb = await pg.locator('#dpad').boundingBox(); assert(bb.x - (pb.x + pb.width) >= 12, 'gap >= 12 px');
+    const cdp = await c4.newCDPSession(pg); await pg.evaluate(() => { BM.UI.game().bombs = []; });
+    for (const dx of [2, 5, 8]) { const pt = { x: bb.x - dx, y: bb.y + bb.height / 2, id: 7 }; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt] }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await pg.waitForTimeout(80); }
+    assert.strictEqual((await pg.evaluate(() => BM.UI.game().bombs.length)), 0, 'gap touch dropped a bomb');
+    const ctr = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, id: 8 }; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [ctr] }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await pg.waitForTimeout(100);
+    assert.strictEqual((await pg.evaluate(() => BM.UI.game().bombs.length)), 1, 'center tap drops a bomb'); ok('320x568: touches 2-8 px outside the bomb button drop nothing; gap ' + Math.round(bb.x - pb.x - pb.width) + ' px'); await c4.close();
   }
   await browser.close(); if (server) server.close(); console.log('browser tests passed:', passed);
 })().catch(e => { console.error(e); process.exit(1); });

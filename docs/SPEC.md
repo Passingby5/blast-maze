@@ -66,6 +66,10 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 
 ### Added in v7 (from QA v6)
 41. The D-pad and bomb button scale with screen width, so they never overlap each other, the board or the screen edge from 320 to 430 px wide in portrait and in landscape. D-pad arms are at least 56 px (58 px at 320 wide). (browser: 11 phone sizes)
-42. Steering assist for human players, in the controller only (engine and CPU robots unchanged). A turn pressed up to 0.3 tile after passing an opening steps back and takes it. Holding toward a wall keeps sliding forward when the opening is the very next tile. A quick tap released up to 150 ms before reaching an opening still turns there. (browser)
+42. (Replaced by 44 in v8.) Steering assist for human players, in the controller only (engine and CPU robots unchanged). A turn pressed up to 0.3 tile after passing an opening steps back and takes it. Holding toward a wall keeps sliding forward when the opening is the very next tile. A quick tap released up to 150 ms before reaching an opening still turns there. (browser)
 43. tests/perf.js ignores 30 warm-up frames and checks p95 < 20 ms, avg < 18 ms and at most 3 frames over 33 ms per 5 s scene, so a single hitch no longer fails it. (perf)
+
+### Added in v8 (from QA v7)
+44. Steering help is now only a short tap buffer (controller layer; engine and CPU robots unchanged): a perpendicular tap released up to 150 ms before the robot reaches a tile where that way is open and free of blasts, bombs and critters still turns there. The robot only ever moves in a direction you are pressing or that fresh tap: no snap-back, no automatic sliding, no move from a standstill. (browser: QA v7 cases S3, S4, S4b, S5 and a random-press property test)
+45. The bomb button only reacts to touches inside its visible circle, so touches in the gap next to the D-pad do nothing. The gap is at least 12 px at 320 px wide. (browser)
 

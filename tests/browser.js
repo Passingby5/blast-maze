@@ -157,31 +157,42 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     ok(w + 'x' + h + ' D-pad (arms ' + Math.round(g.arms[0]) + ' px) and bomb (' + Math.round(g.bomb.w) + ' px) do not overlap; gap ' + Math.round(g.bomb.l - g.pad.r) + ' px'); await c2.close();
   }
   // v8 steering: only a short tap buffer; QA v7 MAJ-1/MAJ-2 repro cases and a random-press property test.
-  // Row 3 is open; above it only column 3 is open ((3,2)), so (4,3) has a pillar above it.
+  // Row 3 is open; above it columns 3 and 5 are open, so (4,3) has a pillar above it and (5,3) leads up.
   {
     const c3 = await browser.newContext({ viewport: { width: 1280, height: 800 } }), pg = await c3.newPage(), errs = [];
     pg.on('pageerror', e => errs.push(e.message));
     await pg.goto(base, { waitUntil: 'load' }); await pg.waitForTimeout(250); await pg.click('[data-act=story]'); await pg.waitForTimeout(2600);
     const setup = (x, tx, dir, extra) => pg.evaluate(([x, tx, dir, extra]) => { const g = BM.UI.game(), p = g.players[0]; g.enemies.forEach(e => { e.speed = 0.0001; e.x = e.tx = 13; e.y = e.ty = 11; }); g.bombs = []; p.inv = 0; p.alive = true;
       for (let y = 0; y < 13; y++) for (let x2 = 0; x2 < 15; x2++) g.flames[y][x2] = 0;
-      for (let i = 1; i < 14; i++) { g.map[3][i] = 0; g.items[3][i] = null; g.map[2][i] = i === 3 ? 0 : 1; g.map[4][i] = 1; } g.map[1][3] = 0;
+      for (let i = 1; i < 14; i++) { g.map[3][i] = 0; g.items[3][i] = null; g.map[2][i] = i === 3 || i === 5 ? 0 : 1; g.map[4][i] = 1; } g.map[1][3] = 0; g.map[1][5] = 0;
       p.x = x; p.tx = tx; p.y = p.ty = 3; p.dir = dir; p.face = 'r';
       if (extra === 'flame') g.flames[3][5] = 99; if (extra === 'enemy') { const e = g.enemies[0]; e.x = e.tx = 5; e.y = e.ty = 3; } }, [x, tx, dir, extra || '']);
     const pl = () => pg.evaluate(() => { const p = BM.UI.game().players[0]; return { x: p.x, y: p.y, alive: p.alive }; });
-    // MAJ-1 S4: standing still at (4,3) under a pillar, hold UP with a blast or a critter on (5,3): nothing happens
-    for (const ex of ['flame', 'enemy', '']) { await setup(4, 4, null, ex); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(700); await pg.keyboard.up('ArrowUp'); const q = await pl(); assert(q.x === 4 && q.y === 3 && q.alive, 'S4 ' + ex + ' ' + JSON.stringify(q)); }
-    ok('QA v7 MAJ-1 S4: pushing Up into a pillar from a standstill does nothing (blast, critter or open floor beside)');
-    // MAJ-1 S3: moving right, release at 3.6, hold UP, blast on (5,3): stop at (4,3), alive
-    await setup(3.6, 4, 'r', 'flame'); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(700); await pg.keyboard.up('ArrowUp'); let q = await pl(); assert(q.x === 4 && q.y === 3 && q.alive, 'S3 ' + JSON.stringify(q));
-    ok('QA v7 MAJ-1 S3: holding Up while moving past a pillar stops safely next to a blast');
+    // per-engine-step tracker
+    const track = () => pg.evaluate(() => { const E = BM.Engine; window.__trk = []; if (!E.__orig) E.__orig = E.step; E.step = function (g, inp) { const r = E.__orig.apply(this, arguments); const p = g.players[0]; window.__trk.push([p.x, p.y, inp[0].dir]); return r; }; });
+    const untrack = () => pg.evaluate(() => { const E = BM.Engine; E.step = E.__orig; return window.__trk; });
+    const walkTo4 = async () => { await setup(2, 2, null); await pg.keyboard.down('ArrowRight'); await pg.waitForFunction(() => BM.UI.game().players[0].tx === 4); await pg.keyboard.up('ArrowRight'); await pg.waitForTimeout(400); };
+    // MAJ-1 S4: walk right onto (4,3) under a pillar, stand 2 s, put a blast or critter on (5,3), hold UP: nothing happens
+    for (const ex of ['flame', 'enemy', '']) { await walkTo4(); await pg.waitForTimeout(ex ? 2000 : 300);
+      await pg.evaluate(ex => { const g = BM.UI.game(); if (ex === 'flame') g.flames[3][5] = 99; if (ex === 'enemy') { const e = g.enemies[0]; e.x = e.tx = 5; e.y = e.ty = 3; } }, ex);
+      await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(700); await pg.keyboard.up('ArrowUp'); const q = await pl(); assert(q.x === 4 && q.y === 3 && q.alive, 'S4 ' + ex + ' ' + JSON.stringify(q)); }
+    ok('QA v7 MAJ-1 S4: after walking onto a tile under a pillar and stopping, holding Up does nothing (blast, critter or open floor beside)');
+    // MAJ-1 S3: walking right, release at ~3.6, hold UP, blast on (5,3): stop at (4,3), alive
+    await setup(2, 2, null, 'flame'); await pg.keyboard.down('ArrowRight'); await pg.waitForFunction(() => BM.UI.game().players[0].x >= 3.55); await pg.keyboard.up('ArrowRight'); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(700); await pg.keyboard.up('ArrowUp'); let q = await pl(); assert(q.x === 4 && q.y === 3 && q.alive, 'S3 ' + JSON.stringify(q));
+    ok('QA v7 MAJ-1 S3: release Right past the opening and hold Up: stops safely next to a blast');
     // MAJ-1 S4b: own bomb beside, push UP into pillar: stays put
-    await setup(4, 4, null); await pg.evaluate(() => { const g = BM.UI.game(); BM.Engine.placeBomb(g, g.players[0]); g.players[0].inv = 99; }); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(500); await pg.keyboard.up('ArrowUp'); q = await pl(); assert(q.x === 4 && q.y === 3, 'S4b ' + JSON.stringify(q));
+    await walkTo4(); await pg.evaluate(() => { const g = BM.UI.game(); BM.Engine.placeBomb(g, g.players[0]); g.players[0].inv = 99; }); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(500); await pg.keyboard.up('ArrowUp'); q = await pl(); assert(q.x === 4 && q.y === 3, 'S4b ' + JSON.stringify(q));
     await pg.evaluate(() => { BM.UI.game().bombs = []; }); ok('QA v7 MAJ-1 S4b: pushing Up next to your own bomb does not slide you away');
-    // MAJ-2 S5: hold RIGHT, tap UP 80 ms just past the opening: never moves left or down; keeps going right
-    for (const x0 of [3.08, 3.13]) { await setup(x0, 4, 'r'); await pg.keyboard.down('ArrowRight'); const xs = []; const t0 = Date.now(); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(80); await pg.keyboard.up('ArrowUp');
-      for (let i = 0; i < 8; i++) { await pg.waitForTimeout(50); xs.push(await pl()); } await pg.keyboard.up('ArrowRight');
-      assert(xs.every((p, i) => p.y <= 3 && (i === 0 || p.x >= xs[i - 1].x)), 'S5 ' + x0 + ' ' + JSON.stringify(xs)); assert(xs[xs.length - 1].x > 4, 'kept going right'); }
-    ok('QA v7 MAJ-2 S5: hold Right + tap Up just past an opening never backs up or goes down');
+    // MAJ-2 S5: hold RIGHT from x=1, tap UP for 80 ms at x 3.08-3.13: per engine step, x never decreases and y never goes down
+    for (let rep = 0; rep < 3; rep++) { await setup(1, 1, null); await track(); await pg.keyboard.down('ArrowRight'); await pg.waitForFunction(() => BM.UI.game().players[0].x >= 3.08, null, { polling: 'raf' });
+      await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(80); await pg.keyboard.up('ArrowUp'); await pg.waitForTimeout(500); await pg.keyboard.up('ArrowRight'); const t = await untrack();
+      assert(t.every((p, i) => p[1] <= 3 && (i === 0 || p[0] >= t[i - 1][0] - 1e-9)), 'S5 moved left or down: ' + JSON.stringify(t.filter((p, i) => i && (p[0] < t[i - 1][0] || p[1] > 3)).slice(0, 3))); }
+    ok('QA v7 MAJ-2 S5: hold Right + tap Up just past an opening never backs up or goes down (checked every engine step, 3 repeats)');
+    // zigzag: alternate Right/Down every 100 ms from (1,3) on an open board: x never decreases
+    await setup(1, 1, null); await pg.evaluate(() => { const g = BM.UI.game(); for (let i = 1; i < 14; i++) g.map[4][i] = i % 2 ? 0 : 1; }); await track();
+    for (let i = 0; i < 8; i++) { const k = i % 2 ? 'ArrowDown' : 'ArrowRight'; await pg.keyboard.down(k); await pg.waitForTimeout(100); await pg.keyboard.up(k); }
+    { const t = await untrack(); assert(t.every((p, i) => i === 0 || (p[0] >= t[i - 1][0] - 1e-9 && p[1] >= t[i - 1][1] - 1e-9)), 'zigzag went backwards'); }
+    ok('QA v7 MAJ-2 zigzag: 100 ms Right/Down swaps never move left or up');
     // early tap buffer still works
     await setup(2.75, 3, 'r'); await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(16); await pg.keyboard.up('ArrowUp'); await pg.waitForTimeout(450); q = await pl(); assert(q.x === 3 && q.y < 2.5, 'tap buffer ' + JSON.stringify(q));
     ok('steering: a quick Up tap just before the opening is buffered and turns');

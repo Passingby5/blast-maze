@@ -62,13 +62,18 @@
   });
   root.addEventListener('keyup', function (e) { var m = who(e.code); if (m) { var a = keys[m[0]], i = a.indexOf(m[1]); if (i >= 0) a.splice(i, 1); } });
   root.addEventListener('blur', function () { keys = [[], []]; if (st.screen === 'play') pause(); });
-  var stick = $('stick'), knob = $('knob'), sid = null;
-  function stickMove(e) { var r = stick.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy), max = r.width * 0.36, k = d > max ? max / d : 1;
-    knob.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)'; stickDir = d < 14 ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'); }
-  stick.addEventListener('pointerdown', function (e) { A.init(); sid = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (x) { } stickMove(e); e.preventDefault(); });
-  stick.addEventListener('pointermove', function (e) { if (e.pointerId === sid) stickMove(e); });
-  function stickUp(e) { if (e.pointerId !== sid) return; sid = null; stickDir = null; knob.style.transform = ''; }
-  stick.addEventListener('pointerup', stickUp); stick.addEventListener('pointercancel', stickUp);
+  // D-pad: each finger on the pad picks the arm under it (by angle from the center), sliding switches arms without lifting,
+  // and the most recently pressed or changed finger wins.
+  var pad = $('dpad'), arms = {}, padPts = {}, padSeq = 0;
+  [].forEach.call(pad.querySelectorAll('.arm'), function (a) { arms[a.dataset.d] = a; });
+  function padDirAt(e) { var r = pad.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); if (Math.hypot(dx, dy) < r.width * 0.09) return null; return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'); }
+  function padRefresh() { var best = null; for (var k in padPts) if (padPts[k].d && (!best || padPts[k].s > best.s)) best = padPts[k]; stickDir = best ? best.d : null; for (var d in arms) arms[d].classList.toggle('on', d === stickDir); }
+  function padMove(e) { var pt = padPts[e.pointerId]; if (!pt) return; var d = padDirAt(e); if (d !== pt.d) { pt.d = d; pt.s = ++padSeq; padRefresh(); } e.preventDefault(); }
+  pad.addEventListener('pointerdown', function (e) { A.init(); try { pad.setPointerCapture(e.pointerId); } catch (x) { } padPts[e.pointerId] = { d: null, s: 0 }; padMove(e); if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) { } e.preventDefault(); });
+  pad.addEventListener('pointermove', padMove);
+  function padUp(e) { if (!padPts[e.pointerId]) return; delete padPts[e.pointerId]; padRefresh(); }
+  pad.addEventListener('pointerup', padUp); pad.addEventListener('pointercancel', padUp); pad.addEventListener('lostpointercapture', padUp);
+  pad.addEventListener('contextmenu', function (e) { e.preventDefault(); }); $('bombBtn').addEventListener('contextmenu', function (e) { e.preventDefault(); });
   $('bombBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); A.init(); bombQ[0] = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) { } });
   function inputs() { var out = [0, 1].map(function (i) { var a = keys[i], d = a.length ? a[a.length - 1] : null; if (i === 0 && stickDir) d = stickDir; var o = { dir: d, bomb: bombQ[i] }; bombQ[i] = false; return o; }); return out; }
   // ---------- buttons (debounced) ----------

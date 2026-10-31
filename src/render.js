@@ -4,7 +4,7 @@
 (function (root) {
   var E = root.BM.Engine, W = E.W, H = E.H;
   var cv, ctx, dpr = 1, T = 32, bw = 0, bh = 0, vw = 0, vh = 0, camX = 0, camY = 0, camInit = false, staticLayer = null, staticKey = '', parts = [], rings = [], time = 0, banner = null, vignette = null;
-  var sprites = {}, reduceMotion = false, theme = null;
+  var bannerLow = false, sprites = {}, reduceMotion = false, theme = null;
   try { reduceMotion = !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { }
   var sysReduce = reduceMotion, userReduce = false;
   function setup(canvas) { cv = canvas; ctx = cv.getContext('2d'); }
@@ -358,6 +358,7 @@
     var key = (g.mode || '') + (g.level || 0) + ':' + (g.seed || 0);
     if (!staticLayer || staticLayer.width !== Math.round(bw * dpr) || key !== staticKey) { staticKey = key; buildStatic(g); }
     var focus = g.players.filter(function (p) { return p.human && !p.bot && p.alive; })[0] || g.players.filter(function (p) { return p.alive; })[0] || g.players[0], tx = Math.max(0, Math.min(bw - vw, (focus.x + 0.5) * T - vw / 2)), ty = Math.max(0, Math.min(bh - vh, (focus.y + 0.5) * T - vh / 2));
+    bannerLow = (focus.y + 0.5) * T - ty < vh * 0.5;
     if (!camInit) { camX = tx; camY = ty; camInit = true; } else { var kk = Math.min(1, dt * 7); camX += (tx - camX) * kk; camY += (ty - camY) * kk; }
     var c = ctx; c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.fillStyle = (theme && theme.bg) || '#000'; c.fillRect(0, 0, cv.width, cv.height);
     shakeT = Math.max(0, shakeT - dt); var amp = reduceMotion ? 0 : (g.shake * g.shake * T * 0.3 + shakeT * T * 0.5), ox = (Math.random() - 0.5) * amp, oy = (Math.random() - 0.5) * amp;
@@ -387,7 +388,7 @@
     // vignette and banner in screen space
     c.setTransform(dpr, 0, 0, dpr, 0, 0); if (!vignette) buildVignette(); c.drawImage(vignette, 0, 0, vw, vh);
     if (banner) { banner.t += dt; var a = Math.min(1, banner.t * 4, (banner.dur - banner.t) * 3); if (a <= 0 && banner.t > banner.dur) banner = null; else {
-      var U = Math.min(T, vw / 11), bH = U * (banner.sub ? 1.9 : 1.3), bW = Math.min(vw * 0.9, U * 10), bx = (vw - bW) / 2, by = U * 0.3 + (reduceMotion ? 0 : (1 - Math.min(1, banner.t * 5)) * -U), pop = 1;
+      var U = Math.min(T, vw / 11), bH = U * (banner.sub ? 1.9 : 1.3), bW = Math.min(vw * 0.9, U * 10), bx = (vw - bW) / 2, by = (bannerLow ? vh - U * (banner.sub ? 2.5 : 1.9) : U * 0.3) + (reduceMotion ? 0 : (1 - Math.min(1, banner.t * 5)) * -U), pop = 1;
       c.save(); c.globalAlpha = Math.max(0, a) * 0.95;
       var pg = c.createLinearGradient(0, by, 0, by + bH); pg.addColorStop(0, 'rgba(60,80,170,0.94)'); pg.addColorStop(1, 'rgba(20,26,70,0.94)'); c.fillStyle = 'rgba(0,0,0,0.35)'; rr(c, bx, by + U * 0.12, bW, bH, U * 0.4); c.fill(); c.fillStyle = pg; rr(c, bx, by, bW, bH, U * 0.4); c.fill(); c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 2; c.stroke();
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '900 ' + Math.round(U * 0.75) + 'px system-ui, sans-serif'; c.lineJoin = 'round'; c.lineWidth = U * 0.14; c.strokeStyle = '#7a2c10';

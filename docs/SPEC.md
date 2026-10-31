@@ -26,7 +26,7 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 
 ### Controls
 17. Keyboard: Player 1 uses WASD or arrow keys plus Space. With 2 players, Player 1 uses WASD + Space and Player 2 uses arrows + Enter. P or Esc pauses. (browser)
-18. Touch: a virtual joystick and a big bomb button, shown on touch devices, at 390x844 portrait and 844x390 landscape. (browser)
+18. Touch: a 4-way D-pad (v6, replaced the joystick) and a big bomb button, shown on touch devices, at 390x844 portrait and 844x390 landscape. (browser)
 19. All buttons are at least 48 x 48 px. Fast double taps only count once (debounced). No sideways scrolling. (browser)
 
 ### Look and sound
@@ -60,4 +60,7 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 ### Added in v5 (from QA v4, art and UI only)
 38. Original player/CPU design ("Boxbot"): rounded-square head with two camera-lens eyes, a light bar on top (no antenna), swept ear fins, colored mitten hands and boots. Bombs are caged energy orbs (no fuse) whose glow shifts from cyan to orange and red as they count down; the bomb button and Extra Bomb icon match. (screenshot 7-player-closeup.jpg)
 39. When the device asks for reduced motion, the shake button reads "Screen shake: Off (reduced motion)" and is disabled. A timed-out points win says "Time's up!". The level banner is a compact strip at the top of the board and fades within 1.6 s. Slow frames switch to lighter effects (fewer particles, no shine sweep); robot bodies are cached sprites. (browser, perf)
+
+### Added in v6 (from owner feedback)
+40. Touch D-pad on the left in portrait and landscape: four arrow arms in a cross, each at least 56 x 56 px. Press and hold moves continuously; sliding a finger to another arm switches direction without lifting (direction comes from the finger's position over the pad); with two fingers on the pad the last pressed wins; the pressed arm lights up and sinks a little. Holding the D-pad while tapping the bomb button works. No text selection or long-press menus. Keyboard controls are unchanged. The level banner moves to the bottom of the board when the player starts in the top half, so it never covers the player. (browser, real multi-touch; screenshots 2-gameplay-blast.jpg and 4-landscape-battle.jpg)
 

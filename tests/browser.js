@@ -29,26 +29,38 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     await tap('[data-act=diff][data-v=easy]'); assert.strictEqual((await S()).save.settings.difficulty, 'easy'); await tap('[data-act=diff][data-v=medium]'); ok(vp.name + ' difficulty select');
     // double tap debounced: story starts once
     await page.dblclick('[data-act=story]'); await page.waitForTimeout(500); let s = await S(); assert.strictEqual(s.screen, 'play'); assert.strictEqual(s.level, 0); ok(vp.name + ' story starts on (double) tap');
-    assert(await page.isVisible('#stick') && await page.isVisible('#bombBtn')); await layout('play');
+    assert(await page.isVisible('#dpad') && await page.isVisible('#bombBtn')); await layout('play');
     const r = s.render; assert.strictEqual(r.dpr, 3); const cssW = await page.evaluate(() => document.getElementById('cv').getBoundingClientRect().width); assert(Math.abs(r.w - cssW * 3) < 2, 'canvas at full dpr'); ok(vp.name + ' touch controls shown; canvas drawn at devicePixelRatio ' + r.dpr + ' (' + r.w + 'px wide)');
-    // joystick moves player
-    const p0 = s.player; const sb = await page.locator('#stick').boundingBox();
+    // D-pad: arms are >= 56 px; holding Right moves right
+    const p0 = s.player; const sb = await page.locator('#dpad').boundingBox();
+    for (const d of ['u', 'd', 'l', 'r']) { const ab = await page.locator('#dpad .arm[data-d=' + d + ']').boundingBox(); assert(ab.width >= 56 && ab.height >= 56, 'arm ' + d + ' >= 56px'); }
     await page.evaluate(() => { BM.UI.game().players[0].inv = 999; });
-    await page.dispatchEvent('#stick', 'pointerdown', { pointerId: 5, clientX: sb.x + sb.width / 2 + 60, clientY: sb.y + sb.height / 2, isPrimary: true });
-    await page.waitForTimeout(500); await page.dispatchEvent('#stick', 'pointerup', { pointerId: 5 }); s = await S(); assert(s.player.x > p0.x + 0.5, 'joystick moved player right'); ok(vp.name + ' joystick moves player');
-    // BLK-1: hold and drag the stick with one finger, tap bomb with a second finger (real CDP multi-touch)
+    const pc = { x: sb.x + sb.width / 2, y: sb.y + sb.height / 2 }, A = sb.width / 3;
+    await page.dispatchEvent('#dpad', 'pointerdown', { pointerId: 5, clientX: pc.x + A, clientY: pc.y, isPrimary: true });
+    assert(await page.locator('#dpad .arm[data-d=r].on').count() === 1, 'press feedback on Right');
+    await page.waitForTimeout(500); await page.dispatchEvent('#dpad', 'pointerup', { pointerId: 5 }); s = await S(); assert(s.player.x > p0.x + 0.5, 'd-pad moved player right');
+    assert(await page.locator('#dpad .arm.on').count() === 0, 'feedback cleared'); ok(vp.name + ' D-pad arms >= 56px, hold Right moves, press feedback');
+    // Real CDP multi-touch: hold Down, slide to Right without lifting, tap bomb with a second finger, last pressed direction wins
     {
-      const cdp = await ctx.newCDPSession(page), bb = await page.locator('#bombBtn').boundingBox(), sb2 = await page.locator('#stick').boundingBox();
+      const cdp = await ctx.newCDPSession(page), bb = await page.locator('#bombBtn').boundingBox();
       await page.evaluate(() => { const g = BM.UI.game(), p = g.players[0]; p.x = p.tx = 1; p.y = p.ty = 1; p.dir = null; for (let y = 1; y < 12; y++) { g.map[y][1] = 0; g.items[y][1] = null; } g.bombs = []; });
-      const f1 = { x: sb2.x + sb2.width / 2, y: sb2.y + sb2.height / 2, id: 1 }, f2 = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, id: 2 };
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [f1] });
-      for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...f1, y: f1.y + i * 10 }] });
-      const f1d = { ...f1, y: f1.y + 60 }; await page.waitForTimeout(250); const y1 = (await S()).player.y; assert(y1 > 1.2, 'stick moving down');
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [f1d, f2] }); await page.waitForTimeout(60);
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [f1d] }); await page.waitForTimeout(250);
-      const mid = await S(); assert.strictEqual(mid.bombs, 1, 'bomb dropped while moving'); assert(mid.player.y > y1 + 0.4, 'still walking after bomb tap');
+      const f1 = { x: pc.x, y: pc.y + A, id: 1 }, f2 = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, id: 2 };
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [f1] }); await page.waitForTimeout(300);
+      const y1 = (await S()).player.y; assert(y1 > 1.2, 'd-pad moving down');
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [f1, f2] }); await page.waitForTimeout(60);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [f1] }); await page.waitForTimeout(250);
+      const mid = await S(); assert.strictEqual(mid.bombs, 1, 'bomb dropped while holding Down'); assert(mid.player.y > y1 + 0.4, 'still walking after bomb tap');
+      await page.evaluate(() => { BM.UI.game().bombs = []; const p = BM.UI.game().players[0]; p.inv = 999; });
+      await page.evaluate(() => { const g = BM.UI.game(), p = g.players[0]; p.x = p.tx = 1; p.y = p.ty = 3; p.dir = null; for (let x = 1; x < 12; x++) { g.map[3][x] = 0; g.items[3][x] = null; } });
+      for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...f1, x: pc.x + A * i / 6, y: pc.y + A * (1 - i / 6) }] });
+      await page.evaluate(() => { const p = BM.UI.game().players[0]; p.x = p.tx = 1; p.y = p.ty = 3; p.dir = null; });
+      await page.waitForTimeout(400); assert(await page.locator('#dpad .arm[data-d=r].on').count() === 1, 'slid onto Right'); const m2 = await S(); if (!(m2.player.x > 1.4)) console.log(JSON.stringify(m2.player), await page.evaluate(() => JSON.stringify([BM.UI.game().map[3], BM.UI.game().players[0].dir, BM.UI.game().status, BM.UI.game().enemies.map(e => [e.x, e.y])]))); assert(m2.player.x > 1.4, 'slide switched to Right without lifting');
+      // second finger on Up while first still on Right: last pressed wins
+      const f3 = { x: pc.x, y: pc.y - A, id: 3 }; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...f1, x: pc.x + A, y: pc.y }, f3] }); await page.waitForTimeout(50);
+      assert(await page.locator('#dpad .arm[data-d=u].on').count() === 1, 'last pressed (Up) wins');
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await page.waitForTimeout(100);
-      await page.evaluate(() => { BM.UI.game().bombs = []; }); ok(vp.name + ' BLK-1 multi-touch: walk with stick and bomb at the same time');
+      assert(await page.locator('#dpad .arm.on').count() === 0, 'all released');
+      await page.evaluate(() => { BM.UI.game().bombs = []; }); ok(vp.name + ' multi-touch: hold D-pad + bomb together, slide switches arms, last pressed wins');
     }
     // MIN-3: big score fits the HUD
     await page.evaluate(() => { BM.UI.game().score = 98765; }); await page.waitForTimeout(100);
@@ -94,7 +106,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); }); page.on('pageerror', e => errors.push(e.message));
   await page.goto(base, { waitUntil: 'load' }); await page.waitForTimeout(300);
   await page.click('[data-act=battle]'); await page.waitForTimeout(400); await page.click('[data-act=humans][data-v="2"]'); await page.waitForTimeout(400); await page.click('[data-act=startBattle]'); await page.waitForTimeout(400);
-  assert(!(await page.isVisible('#stick'))); let s = await page.evaluate(() => BM.UI.state()); assert.strictEqual(s.humans, 2); assert.strictEqual(s.players, 4);
+  assert(!(await page.isVisible('#dpad'))); let s = await page.evaluate(() => BM.UI.state()); assert.strictEqual(s.humans, 2); assert.strictEqual(s.players, 4);
   const before = await page.evaluate(() => BM.UI.game().players.map(p => [p.x, p.y]));
   await page.keyboard.down('KeyD'); await page.keyboard.down('ArrowLeft'); await page.waitForTimeout(300); await page.keyboard.up('KeyD'); await page.keyboard.up('ArrowLeft');
   await page.keyboard.press('Space'); await page.keyboard.press('Enter'); await page.waitForTimeout(100);

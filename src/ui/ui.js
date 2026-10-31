@@ -38,7 +38,7 @@
     var vw = root.innerWidth, vh = root.innerHeight, land = vw > vh; document.body.classList.toggle('landscape', land && touch);
     if (st.screen !== 'play' && st.screen !== 'overlay') return;
     var hud = 56, aw = vw - 12, ah = vh - hud - 12;
-    if (touch && !land) ah -= 230; if (touch && land) aw = vw - 2 * 200;
+    if (touch && !land) ah -= 230; if (touch && land) aw = vw - 2 * 218;
     R.resize(Math.max(150, aw), Math.max(130, ah), touch && !st.zoomOut ? (land ? 30 : 36) : 0);
   }
   root.addEventListener('resize', layout); root.addEventListener('orientationchange', function () { setTimeout(layout, 200); });

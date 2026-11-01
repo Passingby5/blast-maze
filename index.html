@@ -44,15 +44,12 @@ button.icon{min-width:48px;min-height:48px;width:48px;height:48px;padding:0;font
 #cv{display:block;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.08)}
 #pad{flex:none;width:100%;height:230px;position:relative;display:none}
 body.touch #pad{display:block}
-#stick{position:absolute;left:28px;top:50%;width:150px;height:150px;margin-top:-75px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.12),rgba(255,255,255,.04));box-shadow:inset 0 0 0 3px rgba(255,255,255,.18)}
-#knob{position:absolute;left:50%;top:50%;width:66px;height:66px;margin:-33px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9fb4ff 45%,#4a5ea8);box-shadow:0 4px 12px rgba(0,0,0,.5)}
 #bombBtn{position:absolute;right:28px;top:50%;width:124px;height:124px;margin-top:-62px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffd27a,#ff7a2f 50%,#c2410c);box-shadow:0 6px 0 #7a2508,0 10px 24px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.5)}
 #bombBtn span{display:block;width:46px;height:46px;margin:auto;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7a86b8,#1b2140 60%);position:relative}
 #bombBtn span:after{content:"";position:absolute;right:-6px;top:-8px;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle,#fff,#ffd23c 40%,rgba(255,120,0,0) 70%)}
 body.landscape #play{flex-direction:column}
 body.landscape #pad{position:absolute;left:0;right:0;top:56px;bottom:0;height:auto;pointer-events:none;background:none}
-body.landscape #stick,body.landscape #bombBtn{pointer-events:auto}
-body.landscape #stick{left:max(24px,env(safe-area-inset-left))}
+body.landscape #dpad,body.landscape #bombBtn{pointer-events:auto}
 body.landscape #bombBtn{right:max(24px,env(safe-area-inset-right))}
 .dim{background:rgba(5,8,25,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .card{width:min(360px,92vw);background:linear-gradient(180deg,#2c3a7a,#1b2452);border-radius:22px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.2)}
@@ -61,7 +58,7 @@ body.landscape #bombBtn{right:max(24px,env(safe-area-inset-right))}
 body.touch:not(.landscape) #stage{flex:none;padding:10px 0}
 body.touch:not(.landscape) #pad{flex:1;height:auto;min-height:220px}
 #play{overflow:hidden!important;touch-action:none}
-#pad,#stick,#bombBtn,#knob,#cv{touch-action:none}
+#pad,#dpad,#bombBtn,#cv{touch-action:none}
 #hud{font-size:14px}
 .chip{padding:3px 6px}
 #hudL,#hudM{gap:5px}
@@ -88,13 +85,28 @@ button.on{background:linear-gradient(180deg,#8af0a8 0%,#3cc46d 45%,#24a85a 100%)
 .card{background:linear-gradient(180deg,#3a4ca0 0%,#2b3a85 40%,#1a2350 100%);border:2px solid rgba(255,255,255,.14)}
 .card h2,#battleSetup h2,#help h2{background:linear-gradient(180deg,#fff6c8,#ffb43a);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 0 #7a2c10)}
 #cv{border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.12),0 0 0 6px rgba(0,0,0,.25)}
-#stick{background:radial-gradient(circle,rgba(255,255,255,.16),rgba(255,255,255,.05) 70%);box-shadow:inset 0 0 0 3px rgba(255,255,255,.22),inset 0 6px 18px rgba(0,0,0,.35)}
 #btnCalm{width:min(340px,92vw)}
 @media (prefers-reduced-motion:reduce){button{transition:none}}
 button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
 #bombBtn span{background:radial-gradient(circle at 38% 34%,#fff 0,#9ff3ff 22%,#2b8fe8 60%,#1b3f8f 100%);box-shadow:0 0 0 4px #1d1830,0 0 18px rgba(120,230,255,.8)}
 #bombBtn span:before{content:"";position:absolute;left:-4px;right:-4px;top:50%;height:10px;margin-top:-5px;border-radius:5px;background:linear-gradient(180deg,#eef2fb,#7c86a3);box-shadow:0 0 0 2px #1d1830}
 #bombBtn span:after{display:none}
+/* v6 D-pad (replaces joystick) */
+#dpad{position:absolute;left:20px;top:50%;width:192px;height:192px;margin-top:-96px;display:grid;grid-template:repeat(3,64px)/repeat(3,64px);touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#dpad .arm{background:linear-gradient(180deg,#5d74c9,#33427f);box-shadow:0 4px 0 #1d2752,0 6px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;transition:transform .05s;pointer-events:none}
+#dpad .arm[data-d=u]{grid-area:1/2;border-radius:18px 18px 6px 6px}#dpad .arm[data-d=d]{grid-area:3/2;border-radius:6px 6px 18px 18px}
+#dpad .arm[data-d=l]{grid-area:2/1;border-radius:18px 6px 6px 18px}#dpad .arm[data-d=r]{grid-area:2/3;border-radius:6px 18px 18px 6px}
+#dpad .hub{grid-area:2/2;background:#33427f;box-shadow:0 4px 0 #1d2752;pointer-events:none}
+#dpad .arm i{width:0;height:0;border:14px solid transparent;border-bottom:20px solid #fff;margin-bottom:12px;filter:drop-shadow(0 1px 0 rgba(0,0,0,.4))}
+#dpad .arm[data-d=d] i{transform:rotate(180deg);margin:12px 0 0}#dpad .arm[data-d=l] i{transform:rotate(-90deg);margin:0 12px 0 0}#dpad .arm[data-d=r] i{transform:rotate(90deg);margin:0 0 0 12px}
+#dpad .arm.on{background:linear-gradient(180deg,#ffd06a,#f07a1a);box-shadow:0 1px 0 #9a420a,inset 0 2px 4px rgba(0,0,0,.25);transform:translateY(3px)}
+body.landscape #dpad{pointer-events:auto;left:max(16px,env(safe-area-inset-left))}
+#pad,#bombBtn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+/* v7 responsive pad: arm size --a shrinks on narrow phones so the D-pad and bomb button never overlap */
+#pad{--a:min(64px,calc((100vw - 44px) / 4.75))}
+#dpad{left:max(14px,env(safe-area-inset-left));width:calc(var(--a) * 3);height:calc(var(--a) * 3);margin-top:calc(var(--a) * -1.5);grid-template:repeat(3,var(--a))/repeat(3,var(--a))}
+#bombBtn{right:max(14px,env(safe-area-inset-right));width:calc(var(--a) * 1.75);height:calc(var(--a) * 1.75);margin-top:calc(var(--a) * -0.875)}
+body.landscape #pad{--a:64px}
 </style></head>
 <body>
 <div id="app">
@@ -136,12 +148,12 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
   <section id="play" class="screen hidden">
     <div id="hud"><div id="hudL"></div><div id="hudM"></div><div id="hudR"><button data-act="mute" class="icon muteBtn" aria-label="Sound">&#9835;</button><button data-act="pause" class="icon" aria-label="Pause">II</button></div></div>
     <div id="stage"><canvas id="cv"></canvas></div>
-    <div id="pad"><div id="stick"><div id="knob"></div></div><button id="bombBtn" aria-label="Drop bomb"><span></span></button></div>
+    <div id="pad"><div id="dpad" aria-label="Move"><div class="arm" data-d="u"><i></i></div><div class="arm" data-d="l"><i></i></div><div class="hub"></div><div class="arm" data-d="r"><i></i></div><div class="arm" data-d="d"><i></i></div></div><button id="bombBtn" aria-label="Drop bomb"><span></span></button></div>
   </section>
   <section id="overlay" class="screen dim hidden"><div class="card"><h2 id="ovTitle"></h2><div id="ovText"></div><div id="ovBtns" class="col"></div></div></section>
 </div>
 
-<script>var BM_BUILD = { label: "v5 - Oct 27 - b0669ad", id: "e5c239a2" };</script>
+<script>var BM_BUILD = { label: "v8 - Oct 31 - 61987c7", id: "519fb432" };</script>
 <script data-src="engine.js">
 // Blast Maze game engine: pure logic, no DOM. Works in the browser (window.BM.Engine) and in Node (module.exports).
 (function (root) {
@@ -610,7 +622,7 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
 (function (root) {
   var E = root.BM.Engine, W = E.W, H = E.H;
   var cv, ctx, dpr = 1, T = 32, bw = 0, bh = 0, vw = 0, vh = 0, camX = 0, camY = 0, camInit = false, staticLayer = null, staticKey = '', parts = [], rings = [], time = 0, banner = null, vignette = null;
-  var sprites = {}, reduceMotion = false, theme = null;
+  var bannerLow = false, sprites = {}, reduceMotion = false, theme = null;
   try { reduceMotion = !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { }
   var sysReduce = reduceMotion, userReduce = false;
   function setup(canvas) { cv = canvas; ctx = cv.getContext('2d'); }
@@ -964,6 +976,7 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
     var key = (g.mode || '') + (g.level || 0) + ':' + (g.seed || 0);
     if (!staticLayer || staticLayer.width !== Math.round(bw * dpr) || key !== staticKey) { staticKey = key; buildStatic(g); }
     var focus = g.players.filter(function (p) { return p.human && !p.bot && p.alive; })[0] || g.players.filter(function (p) { return p.alive; })[0] || g.players[0], tx = Math.max(0, Math.min(bw - vw, (focus.x + 0.5) * T - vw / 2)), ty = Math.max(0, Math.min(bh - vh, (focus.y + 0.5) * T - vh / 2));
+    bannerLow = (focus.y + 0.5) * T - ty < vh * 0.5;
     if (!camInit) { camX = tx; camY = ty; camInit = true; } else { var kk = Math.min(1, dt * 7); camX += (tx - camX) * kk; camY += (ty - camY) * kk; }
     var c = ctx; c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.fillStyle = (theme && theme.bg) || '#000'; c.fillRect(0, 0, cv.width, cv.height);
     shakeT = Math.max(0, shakeT - dt); var amp = reduceMotion ? 0 : (g.shake * g.shake * T * 0.3 + shakeT * T * 0.5), ox = (Math.random() - 0.5) * amp, oy = (Math.random() - 0.5) * amp;
@@ -993,7 +1006,7 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
     // vignette and banner in screen space
     c.setTransform(dpr, 0, 0, dpr, 0, 0); if (!vignette) buildVignette(); c.drawImage(vignette, 0, 0, vw, vh);
     if (banner) { banner.t += dt; var a = Math.min(1, banner.t * 4, (banner.dur - banner.t) * 3); if (a <= 0 && banner.t > banner.dur) banner = null; else {
-      var U = Math.min(T, vw / 11), bH = U * (banner.sub ? 1.9 : 1.3), bW = Math.min(vw * 0.9, U * 10), bx = (vw - bW) / 2, by = U * 0.3 + (reduceMotion ? 0 : (1 - Math.min(1, banner.t * 5)) * -U), pop = 1;
+      var U = Math.min(T, vw / 11), bH = U * (banner.sub ? 1.9 : 1.3), bW = Math.min(vw * 0.9, U * 10), bx = (vw - bW) / 2, by = (bannerLow ? vh - U * (banner.sub ? 2.5 : 1.9) : U * 0.3) + (reduceMotion ? 0 : (1 - Math.min(1, banner.t * 5)) * -U), pop = 1;
       c.save(); c.globalAlpha = Math.max(0, a) * 0.95;
       var pg = c.createLinearGradient(0, by, 0, by + bH); pg.addColorStop(0, 'rgba(60,80,170,0.94)'); pg.addColorStop(1, 'rgba(20,26,70,0.94)'); c.fillStyle = 'rgba(0,0,0,0.35)'; rr(c, bx, by + U * 0.12, bW, bH, U * 0.4); c.fill(); c.fillStyle = pg; rr(c, bx, by, bW, bH, U * 0.4); c.fill(); c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 2; c.stroke();
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '900 ' + Math.round(U * 0.75) + 'px system-ui, sans-serif'; c.lineJoin = 'round'; c.lineWidth = U * 0.14; c.strokeStyle = '#7a2c10';
@@ -1048,13 +1061,13 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
     begin(E.newBattle({ humans: st.humans, cpus: st.cpus, difficulty: data.settings.difficulty, seed: (Date.now() % 100000) + round, wins: st.wins }));
     R.showBanner('Round ' + round, 'Last robot standing wins!', 2); A.music('main');
   }
-  function begin(g) { st.zoomOut = false; st.g = g; st.paused = false; st.handled = false; R.reset(); show('play'); layout(); updateHud(true); }
+  function begin(g) { asst = [{}, {}]; st.zoomOut = false; st.g = g; st.paused = false; st.handled = false; R.reset(); show('play'); layout(); updateHud(true); }
   // ---------- layout ----------
   function layout() {
     var vw = root.innerWidth, vh = root.innerHeight, land = vw > vh; document.body.classList.toggle('landscape', land && touch);
     if (st.screen !== 'play' && st.screen !== 'overlay') return;
     var hud = 56, aw = vw - 12, ah = vh - hud - 12;
-    if (touch && !land) ah -= 230; if (touch && land) aw = vw - 2 * 200;
+    if (touch && !land) ah -= 230; if (touch && land) aw = vw - 2 * 218;
     R.resize(Math.max(150, aw), Math.max(130, ah), touch && !st.zoomOut ? (land ? 30 : 36) : 0);
   }
   root.addEventListener('resize', layout); root.addEventListener('orientationchange', function () { setTimeout(layout, 200); });
@@ -1078,15 +1091,43 @@ button:disabled{opacity:.7;filter:saturate(.4);cursor:default}
   });
   root.addEventListener('keyup', function (e) { var m = who(e.code); if (m) { var a = keys[m[0]], i = a.indexOf(m[1]); if (i >= 0) a.splice(i, 1); } });
   root.addEventListener('blur', function () { keys = [[], []]; if (st.screen === 'play') pause(); });
-  var stick = $('stick'), knob = $('knob'), sid = null;
-  function stickMove(e) { var r = stick.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), d = Math.hypot(dx, dy), max = r.width * 0.36, k = d > max ? max / d : 1;
-    knob.style.transform = 'translate(' + dx * k + 'px,' + dy * k + 'px)'; stickDir = d < 14 ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'); }
-  stick.addEventListener('pointerdown', function (e) { A.init(); sid = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (x) { } stickMove(e); e.preventDefault(); });
-  stick.addEventListener('pointermove', function (e) { if (e.pointerId === sid) stickMove(e); });
-  function stickUp(e) { if (e.pointerId !== sid) return; sid = null; stickDir = null; knob.style.transform = ''; }
-  stick.addEventListener('pointerup', stickUp); stick.addEventListener('pointercancel', stickUp);
-  $('bombBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); A.init(); bombQ[0] = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) { } });
-  function inputs() { var out = [0, 1].map(function (i) { var a = keys[i], d = a.length ? a[a.length - 1] : null; if (i === 0 && stickDir) d = stickDir; var o = { dir: d, bomb: bombQ[i] }; bombQ[i] = false; return o; }); return out; }
+  // D-pad: each finger on the pad picks the arm under it (by angle from the center), sliding switches arms without lifting,
+  // and the most recently pressed or changed finger wins.
+  var pad = $('dpad'), arms = {}, padPts = {}, padSeq = 0;
+  [].forEach.call(pad.querySelectorAll('.arm'), function (a) { arms[a.dataset.d] = a; });
+  function padDirAt(e) { var r = pad.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); if (Math.hypot(dx, dy) < r.width * 0.09) return null; return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'r' : 'l') : (dy > 0 ? 'd' : 'u'); }
+  function padRefresh() { var best = null; for (var k in padPts) if (padPts[k].d && (!best || padPts[k].s > best.s)) best = padPts[k]; stickDir = best ? best.d : null; for (var d in arms) arms[d].classList.toggle('on', d === stickDir); }
+  function padMove(e) { var pt = padPts[e.pointerId]; if (!pt) return; var d = padDirAt(e); if (d !== pt.d) { pt.d = d; pt.s = ++padSeq; padRefresh(); } e.preventDefault(); }
+  pad.addEventListener('pointerdown', function (e) { A.init(); try { pad.setPointerCapture(e.pointerId); } catch (x) { } padPts[e.pointerId] = { d: null, s: 0 }; padMove(e); if (navigator.vibrate) try { navigator.vibrate(8); } catch (x) { } e.preventDefault(); });
+  pad.addEventListener('pointermove', padMove);
+  function padUp(e) { if (!padPts[e.pointerId]) return; delete padPts[e.pointerId]; padRefresh(); }
+  pad.addEventListener('pointerup', padUp); pad.addEventListener('pointercancel', padUp); pad.addEventListener('lostpointercapture', padUp);
+  pad.addEventListener('contextmenu', function (e) { e.preventDefault(); }); $('bombBtn').addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  $('bombBtn').addEventListener('pointerdown', function (e) { e.preventDefault(); var br = this.getBoundingClientRect(), rx = e.clientX - (br.left + br.width / 2), ry = e.clientY - (br.top + br.height / 2); if (e.clientX || e.clientY) { if (rx * rx + ry * ry > (br.width / 2) * (br.width / 2)) return; } A.init(); bombQ[0] = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) { } });
+  // Steering assist (controller layer only; the engine and CPU robots are unchanged). Kept deliberately simple and safe:
+  // the only help is a short tap buffer. If you tap a perpendicular direction and let go up to 150 ms before the robot
+  // reaches a tile where that way is open (and holds no blast or critter), the robot still turns there.
+  // The output direction is always either a direction you are pressing right now or that buffered tap. There is no
+  // snap-back, no automatic sliding and no move from a standstill that you did not press.
+  var DV = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }, BUF = 0.15;
+  var asst = [{}, {}], tick = 0;
+  function perp(a, b) { return a && b && (DV[a][0] === 0) !== (DV[b][0] === 0); }
+  function safeOpen(g, p, x, y) {
+    if (x < 0 || y < 0 || x >= E.W || y >= E.H || g.map[y][x] !== E.FLOOR || g.flames[y][x] > 0) return false;
+    for (var i = 0; i < g.bombs.length; i++) { var b = g.bombs[i]; if (b.x === x && b.y === y) return false; }
+    for (i = 0; i < g.enemies.length; i++) { var e = g.enemies[i]; if (e.alive && ((e.tx === x && e.ty === y) || (Math.round(e.x) === x && Math.round(e.y) === y))) return false; }
+    return true;
+  }
+  function assist(g, p, want, S) {
+    if (S.prev && S.prev !== want) { S.buf = S.prev; S.bufT = tick; }
+    S.prev = want;
+    var m = p && p.alive ? p.dir : null;
+    if (S.buf && (tick - S.bufT > BUF || !m)) S.buf = null;
+    if (S.buf && (want === null || want === m) && perp(S.buf, m)) { var d = DV[S.buf]; if (safeOpen(g, p, p.tx + d[0], p.ty + d[1])) return S.buf; }
+    return want;
+  }
+  BM.UI_DEBUG = { pressed: function () { return { keys: keys[0].slice(), pad: stickDir, buf: asst[0].buf || null }; } };
+  function inputs() { tick += 1 / 60; var g = st.g, hum = g ? g.players.filter(function (p) { return p.human; }) : []; var out = [0, 1].map(function (i) { var a = keys[i], d = a.length ? a[a.length - 1] : null; if (i === 0 && stickDir) d = stickDir; if (g && hum[i]) d = assist(g, hum[i], d, asst[i]); var o = { dir: d, bomb: bombQ[i] }; bombQ[i] = false; return o; }); return out; }
   // ---------- buttons (debounced) ----------
   var lastTap = 0;
   document.addEventListener('click', function (e) {

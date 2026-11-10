@@ -24,7 +24,7 @@ function bombOnlyFate(g) {
 }
 
 let placed = 0, checked = 0;
-for (const lv of [16, 21]) for (const diff of ['easy', 'medium', 'hard']) for (let s = 1; s <= SEEDS; s++) {
+for (const lv of [14, 15, 16, 17, 18, 19, 20, 21]) for (const diff of ['easy', 'medium', 'hard']) for (let s = 1; s <= SEEDS; s++) {
   const g = E.newStory(lv, { seed: s, difficulty: diff, carry: { bombs: 3, range: 3, speedUps: 1, kick: false, shield: 0, lives: 3, score: 0 } });
   clearCrates(g);
   const boss = g.enemies.find(e => e.type === 'boss');
@@ -49,16 +49,21 @@ for (const lv of [16, 21]) for (const diff of ['easy', 'medium', 'hard']) for (l
   }
 }
 
-// QA natural controller seed: corner bomb must not make every direction die to the blast
+// Constructed corridor trap: escape must refuse, and any natural boss bomb must stay escapable
 {
-  const seed = 20324378;
-  const g = E.newStory(16, { seed, difficulty: 'medium' });
-  for (let i = 0; i < 93; i++) E.step(g, [{ dir: 'r' }], DT);
-  for (let i = 0; i < 100; i++) E.step(g, [{}], DT);
-  assert.strictEqual(E.playerHasBombEscape(g, 4, 1, 2, E.BOMB_TIME), false);
-  if (g.bombs.some(b => b.fromBoss)) {
-    const r = bombOnlyFate(g);
-    assert(!r.unavoidable, 'QA natural trap seed must be escapable from the blast');
+  const g = E.newStory(16, { seed: 20324378, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) g.map[y][x] = (x % 2 === 0 && y % 2 === 0) ? E.WALL : E.CRATE;
+  for (let y = 1; y <= 11; y++) g.map[y][1] = E.FLOOR;
+  const p = g.players[0]; Object.assign(p, { x: 1, y: 5, tx: 1, ty: 5, speed: 3.2, shield: 0, inv: 0 });
+  assert.strictEqual(E.playerHasBombEscape(g, 1, 1, 12, E.BOMB_TIME), false);
+  // Open play with crates cleared: any placed boss bomb must be bomb-escapable
+  const g2 = E.newStory(16, { seed: 20324378, difficulty: 'medium' });
+  clearCrates(g2);
+  const boss = g2.enemies.find(e => e.type === 'boss');
+  boss.bombCD = 0;
+  if (E.placeBossBomb(g2, boss)) {
+    const r = bombOnlyFate(g2);
+    assert(!r.unavoidable, 'placed boss bomb on open map must be escapable from the blast');
   }
 }
 

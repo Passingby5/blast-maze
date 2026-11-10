@@ -338,7 +338,7 @@
     c.fillStyle = 'rgba(255,255,255,0.5)'; c.beginPath(); c.ellipse(-T * 0.2, -T * 0.6, T * 0.12, T * 0.035, -0.2, 0, 7); c.fill();
   }
   function drawBossHp(c, e) {
-    var cx = (e.x + 0.5) * T, top = (e.y + 0.5) * T - T * 1.25, n = 6, pw = T * 0.16, gap = T * 0.04, tw = n * pw + (n - 1) * gap, x0 = cx - tw / 2;
+    var cx = (e.x + 0.5) * T, top = (e.y + 0.5) * T - T * 1.25, n = Math.max(1, e.maxHp || e.hp || 6), pw = T * 0.14, gap = T * 0.03, tw = n * pw + (n - 1) * gap, x0 = cx - tw / 2;
     c.fillStyle = 'rgba(15,12,35,0.75)'; rr(c, x0 - T * 0.06, top - T * 0.06, tw + T * 0.12, T * 0.2, T * 0.1); c.fill();
     for (var i = 0; i < n; i++) { var on = i < e.hp; c.fillStyle = on ? (e.hp <= 2 ? '#ff5a5a' : '#5fff8a') : 'rgba(255,255,255,0.15)'; rr(c, x0 + i * (pw + gap), top, pw, T * 0.08, T * 0.04); c.fill(); }
   }

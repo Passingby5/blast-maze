@@ -20,11 +20,13 @@ t('8 shield', () => { const g = blank(), p = g.players[0]; p.shield = 1; E.hit(g
 t('9 seeded rng repeatable', () => { const a = E.newBattle({ seed: 42, cpus: 3 }), b = E.newBattle({ seed: 42, cpus: 3 }); assert.deepStrictEqual(a.map, b.map); run(a, 20); run(b, 20); assert.deepStrictEqual(a.players.map(p => [p.x, p.y, p.alive]), b.players.map(p => [p.x, p.y, p.alive])); const c = E.newBattle({ seed: 43 }); assert.notDeepStrictEqual(a.map, c.map); });
 t('10 enemy types and boss', () => { assert.deepStrictEqual(Object.keys(E.ETYPES), ['blob', 'chaser', 'ghost', 'boss']); const g = E.newStory(5, { seed: 1 }), b = g.enemies.find(e => e.type === 'boss'); assert.strictEqual(b.hp, 6); E.hit(g, b); assert(b.alive && b.hp === 5); const gh = E.newStory(6, { seed: 1 }).enemies.find(e => e.type === 'ghost'); assert(gh.ghost); run(g, 10); assert(g.enemies.length > 1, 'boss calls helpers'); });
 t('11 difficulty changes things', () => { const sp = d => E.newStory(3, { seed: 1, difficulty: d }).enemies[0].speed; assert(sp('easy') < sp('medium') && sp('medium') < sp('hard')); assert(E.DIFF.easy.lives > E.DIFF.hard.lives); assert(E.DIFF.easy.cpuMiss > E.DIFF.hard.cpuMiss); });
-t('12 story 22 levels, bosses on 6/12/17/22, portal after clear', () => {
+t('12 story 22 levels, bosses on 6/12 and 15-22, portal after clear', () => {
   assert.strictEqual(E.LEVELS.length, 22);
-  assert(E.LEVELS[5].boss && E.LEVELS[11].boss && E.LEVELS[16].boss && E.LEVELS[21].boss);
-  assert(E.LEVELS[16].bossBombs && E.LEVELS[21].bossBombs);
+  assert(E.LEVELS[5].boss && E.LEVELS[11].boss);
+  for (let i = 14; i <= 21; i++) assert(E.LEVELS[i].boss && E.LEVELS[i].bossBombs, 'L' + (i + 1));
   assert(!E.LEVELS[5].bossBombs && !E.LEVELS[11].bossBombs);
+  assert.strictEqual(E.LEVELS[16].name, 'Mid Bolt');
+  assert.strictEqual(E.LEVELS[21].name, 'Ultra Bolt End');
   const g = blank(); g.portal = { x: 3, y: 1, open: false }; run(g, 0.1); assert(g.portal.open); run(g, 1, [{ dir: 'r' }]); assert.strictEqual(g.status, 'won');
 });
 t('13 all levels solvable', () => { for (let s = 1; s <= 50; s++) for (let l = 0; l < E.LEVELS.length; l++) assert(E.solvable(E.newStory(l, { seed: s })), l + ' ' + s); });
@@ -60,9 +62,11 @@ t('v9 speed ramp and CAP', () => {
   assert(sp(21, 'easy') < sp(21, 'medium') && sp(21, 'medium') <= sp(21, 'hard'));
   assert(E.SPEED_CAP === 3.3);
 });
-t('v9 chaser counts ramp', () => {
+t('v9/v12 chaser counts on late levels', () => {
   const c = lv => E.LEVELS[lv].c;
-  assert.strictEqual(c(12), 2); assert.strictEqual(c(14), 3); assert.strictEqual(c(17), 4); assert.strictEqual(c(19), 5); assert.strictEqual(c(20), 5);
+  assert.strictEqual(c(12), 2); assert.strictEqual(c(13), 2);
+  assert.strictEqual(c(14), 1); assert.strictEqual(c(16), 1); assert.strictEqual(c(17), 2);
+  assert.strictEqual(c(20), 3); assert.strictEqual(c(21), 2);
 });
 t('v9 early bosses never drop bombs', () => {
   for (const lv of [5, 11]) {
@@ -75,8 +79,8 @@ t('v9 early bosses never drop bombs', () => {
     assert(g.bombs.every(b => !b.fromBoss));
   }
 });
-t('v9 L17/L22 boss bombs distinct and fair', () => {
-  for (const lv of [16, 21]) {
+t('v12 L15-L22 boss bombs distinct and fair', () => {
+  for (const lv of [14, 16, 21]) {
     const g = E.newStory(lv, { seed: 7, difficulty: 'hard' });
     assert(g.bossBombs);
     for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] === E.CRATE) g.map[y][x] = E.FLOOR;
@@ -117,31 +121,32 @@ t('v9 save accepts levels through 21', () => {
 
 
 t('v10 R9-1 escape treats proposed bomb as solid', () => {
-  const g = E.newStory(16, { seed: 20324378, difficulty: 'medium' });
-  for (let i = 0; i < 93; i++) E.step(g, [{ dir: 'r' }], 1 / 60);
-  for (let i = 0; i < 100; i++) E.step(g, [{}], 1 / 60);
-  assert.strictEqual(E.playerHasBombEscape(g, 4, 1, 2, E.BOMB_TIME), false);
-  const boss = g.enemies.find(e => e.type === 'boss'); boss.bombCD = 0;
+  const g = E.newStory(16, { seed: 1, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) g.map[y][x] = (x % 2 === 0 && y % 2 === 0) ? E.WALL : E.CRATE;
+  for (let y = 1; y <= 11; y++) g.map[y][1] = E.FLOOR; // open vertical corridor, no side exits
+  const p = g.players[0]; Object.assign(p, { x: 1, y: 5, tx: 1, ty: 5, speed: 3.2, shield: 0, inv: 0 });
+  g.enemies.forEach(e => { if (e.type !== 'boss') e.alive = false; });
+  assert.strictEqual(E.playerHasBombEscape(g, 1, 1, 12, E.BOMB_TIME), false);
+  const boss = g.enemies.find(e => e.type === 'boss');
+  boss.bombCD = 0; boss.x = boss.tx = 1; boss.y = boss.ty = 1;
   E.placeBossBomb(g, boss);
-  assert(!g.bombs.some(b => b.fromBoss && b.x === 4 && b.y === 1));
+  assert(!g.bombs.some(b => b.fromBoss && b.x === 1 && b.y === 1), 'trapping corridor tile must not get a bomb');
 });
-t('v10 R9-1 natural corner not unavoidable', () => {
-  const seed = 20324378;
-  function toFrame() {
-    const g = E.newStory(16, { seed, difficulty: 'medium' });
-    for (let i = 0; i < 93; i++) E.step(g, [{ dir: 'r' }], 1 / 60);
-    for (let i = 0; i < 100; i++) E.step(g, [{}], 1 / 60);
-    return g;
-  }
-  const g0 = toFrame();
-  if (!g0.bombs.some(b => b.fromBoss)) return; // no bomb is also fine
+t('v10 R9-1 open side exit survives a boss bomb', () => {
+  const g = E.newStory(16, { seed: 2, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] !== E.WALL) g.map[y][x] = E.FLOOR;
+  g.enemies.forEach(e => { e.alive = false; });
+  const p = g.players[0]; Object.assign(p, { x: 6, y: 1, tx: 6, ty: 1, shield: 0, inv: 0 });
+  g.bombs.push({ id: 99, x: 3, y: 1, timer: 2.4, range: 2, owner: 2, fromBoss: true, slide: null, sp: 0 });
   let survivor = false;
   for (const dir of [null, 'u', 'd', 'l', 'r']) {
-    const g = toFrame();
-    for (let n = 0; n < 180 && g.status === 'play'; n++) E.step(g, [{ dir }], 1 / 60);
-    if (g.players[0].alive) survivor = true;
+    const clone = JSON.parse(JSON.stringify(g));
+    clone.rng = E.RNG(1);
+    const q = clone.players[0];
+    for (let n = 0; n < 180 && clone.status === 'play'; n++) E.step(clone, [{ dir }], 1 / 60);
+    if (q.alive) survivor = true;
   }
-  assert(survivor, 'at least one immediate direction must survive');
+  assert(survivor, 'open floor must leave an escape from a non-blocking boss bomb');
 });
 t('v10 R9-2 boss bombs keep reaction fuse on chain', () => {
   const g = E.newStory(16, { seed: 3, difficulty: 'medium' });
@@ -231,6 +236,25 @@ t('v11 R10-1 chained corridor needs >=0.2s exit margin', () => {
     E.step(g, [{ dir }], 1 / 60);
   }
   assert(!p.alive, '0.2s-delayed Right still dies if bomb is forced — validator must refuse this placement');
+});
+
+
+t('v12 boss HP and bomb ramp L15-L22', () => {
+  const hps = [];
+  for (let lv = 14; lv <= 21; lv++) {
+    const g = E.newStory(lv, { seed: 1, difficulty: 'hard' });
+    const b = g.enemies.find(e => e.type === 'boss');
+    assert(b && g.bossBombs);
+    assert.strictEqual(b.hp, E.LEVELS[lv].bossHp);
+    assert.strictEqual(b.maxHp, b.hp);
+    hps.push(b.hp);
+    const P = E.bossBombParams(g);
+    assert(P.cd > 0 && P.fuse === E.BOMB_TIME);
+  }
+  assert(hps[0] < hps[2] && hps[2] <= hps[7], 'HP should ramp toward finale');
+  const early = E.bossBombParams(E.newStory(14, { seed: 1, difficulty: 'easy' }));
+  const late = E.bossBombParams(E.newStory(21, { seed: 1, difficulty: 'hard' }));
+  assert(late.cd < early.cd && late.max >= early.max);
 });
 
 console.log('unit tests passed:', n);

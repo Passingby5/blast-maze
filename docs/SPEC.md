@@ -88,3 +88,6 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 
 ### Added in v11 (QA R10 escape timing)
 54. Boss-bomb escape validates exit time from every threatened tile on the path (half-tile leave), with at least BOSS_ESCAPE_REACT (0.2 s) margin after chain-shortened deadlines. The QA mobile-chain corridor at L17 seed 1 is refused. (unit + boss-safety)
+
+### Added in v12 (bombing bosses on L15-L22)
+55. Levels 15-22 each have a bombing boss (Spark Bolt through Ultra Bolt End). L17 remains Mid Bolt and L22 remains Ultra Bolt End as the strongest. L6 and L12 bosses still do not bomb. Boss HP, bomb cooldown/max/range, and helper summoning ramp across L15-L22. Clear rule unchanged: defeat the boss and all critters, then take the portal. (unit + sim + boss-safety)

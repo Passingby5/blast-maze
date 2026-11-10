@@ -16,29 +16,31 @@
   var SPEED_CAP = 3.30;
   // Boss bombs chained by other blasts keep at least this much fuse (seconds) so the player can react.
   var BOSS_CHAIN_MIN = 0.55, BOSS_ESCAPE_REACT = 0.2;
+  // L15-L22 (indices 14-21) each have a bombing boss. L6/L12 bosses do not bomb.
+  // bossHp / helpersMax / spawnCD tune the fight; enemy counts stay lean so the board stays clearable.
   var LEVELS = [
     { name: 'Sunny Start', crates: 0.45, b: 2, c: 0, g: 0 },
     { name: 'Crate Garden', crates: 0.55, b: 3, c: 0, g: 0 },
     { name: 'Busy Blobs', crates: 0.55, b: 4, c: 0, g: 0 },
     { name: 'Here They Come', crates: 0.5, b: 2, c: 2, g: 0 },
     { name: 'Tight Corners', crates: 0.65, b: 3, c: 2, g: 0 },
-    { name: 'Big Bolt Boss', crates: 0.3, b: 0, c: 0, g: 0, boss: true },
+    { name: 'Big Bolt Boss', crates: 0.3, b: 0, c: 0, g: 0, boss: true, bossHp: 6 },
     { name: 'Spooky Floaters', crates: 0.55, b: 2, c: 0, g: 2 },
     { name: 'Mixed Bag', crates: 0.6, b: 2, c: 2, g: 1 },
     { name: 'Chase Lane', crates: 0.5, b: 0, c: 4, g: 1 },
     { name: 'Ghost Town', crates: 0.6, b: 1, c: 1, g: 4 },
     { name: 'Crowded Maze', crates: 0.55, b: 3, c: 3, g: 2 },
-    { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true },
+    { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true, bossHp: 6 },
     { name: 'Hot Pursuit', crates: 0.5, b: 2, c: 2, g: 0, spd: 1.08 },
     { name: 'Faster Footing', crates: 0.55, b: 2, c: 2, g: 1, spd: 1.12 },
-    { name: 'Triple Trail', crates: 0.55, b: 1, c: 3, g: 1, spd: 1.16 },
-    { name: 'Pressure Cooker', crates: 0.6, b: 2, c: 3, g: 1, spd: 1.20 },
-    { name: 'Mid Bolt', crates: 0.35, b: 0, c: 2, g: 1, boss: true, bossBombs: true, spd: 1.25 },
-    { name: 'Pack Hunt', crates: 0.55, b: 1, c: 4, g: 1, spd: 1.30 },
-    { name: 'No Escape', crates: 0.6, b: 1, c: 4, g: 2, spd: 1.35 },
-    { name: 'Swarm', crates: 0.48, b: 2, c: 5, g: 1, spd: 1.40 },
-    { name: 'Gauntlet', crates: 0.50, b: 1, c: 5, g: 2, spd: 1.45 },
-    { name: 'Ultra Bolt End', crates: 0.35, b: 0, c: 3, g: 2, boss: true, bossBombs: true, spd: 1.50 }
+    { name: 'Spark Bolt', crates: 0.4, b: 1, c: 1, g: 0, boss: true, bossBombs: true, bossHp: 4, helpersMax: 1, spawnCD: 14, spd: 1.16 },
+    { name: 'Fuse Knight', crates: 0.4, b: 1, c: 1, g: 1, boss: true, bossBombs: true, bossHp: 5, helpersMax: 1, spawnCD: 13, spd: 1.20 },
+    { name: 'Mid Bolt', crates: 0.35, b: 0, c: 1, g: 1, boss: true, bossBombs: true, bossHp: 6, helpersMax: 2, spawnCD: 12, spd: 1.25 },
+    { name: 'Crown Cracker', crates: 0.4, b: 0, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 6, helpersMax: 2, spawnCD: 11, spd: 1.30 },
+    { name: 'Blast Baron', crates: 0.38, b: 1, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 7, helpersMax: 2, spawnCD: 10, spd: 1.35 },
+    { name: 'Cage King', crates: 0.36, b: 0, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 7, helpersMax: 2, spawnCD: 9, spd: 1.40 },
+    { name: 'Thunder Tank', crates: 0.35, b: 0, c: 3, g: 1, boss: true, bossBombs: true, bossHp: 8, helpersMax: 2, spawnCD: 8, spd: 1.45 },
+    { name: 'Ultra Bolt End', crates: 0.32, b: 0, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 8, helpersMax: 2, spawnCD: 7, spd: 1.50 }
   ];
 
   // Seeded RNG (mulberry32).
@@ -65,8 +67,9 @@
     var raw = ETYPES[type].speed * DIFF[diff].espeed * (levelMul || 1);
     return Math.min(SPEED_CAP, raw);
   }
-  function makeEnemy(id, type, x, y, diff, levelMul) {
-    var t = ETYPES[type]; return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: enemySpeed(type, diff, levelMul), ghost: !!t.ghost, hp: t.hp || 1, inv: 0, alive: true, spawnT: 7, bombCD: type === 'boss' ? 2.8 : 0, anim: 0, brain: true };
+  function makeEnemy(id, type, x, y, diff, levelMul, extras) {
+    var t = ETYPES[type], hp = (extras && extras.hp) || t.hp || 1;
+    return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: enemySpeed(type, diff, levelMul), ghost: !!t.ghost, hp: hp, maxHp: hp, inv: 0, alive: true, spawnT: (extras && extras.spawnCD) || 7, bombCD: type === 'boss' ? 2.8 : 0, anim: 0, brain: true };
   }
   var COLORS = ['#3fa9ff', '#ff6b6b', '#5fd36a', '#ffc93c'], NAMES = ['Blue', 'Red', 'Green', 'Gold'];
 
@@ -90,7 +93,11 @@
     for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) if (g.map[y][x] === FLOOR && x + y >= 11 && !(x === portal[0] && y === portal[1])) spots.push([x, y]);
     var levelMul = L.spd || 1; g.bossBombs = !!L.bossBombs;
     function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; unbox(g, s[0], s[1], 6); g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff, levelMul)); }
-    if (L.boss) { var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null; g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff, levelMul)); }
+    if (L.boss) {
+      var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null;
+      g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff, levelMul, { hp: L.bossHp || 6, spawnCD: L.spawnCD || 7 }));
+      g.helpersMax = L.helpersMax == null ? 2 : L.helpersMax;
+    }
     for (var i = 0; i < L.b; i++) place('blob'); for (i = 0; i < L.c; i++) place('chaser'); for (i = 0; i < L.g; i++) place('ghost');
     return g;
   }
@@ -217,13 +224,20 @@
     return null;
   }
 
-  // Boss bomb params for L15+ bombing bosses (L17 Mid Bolt, L22 Ultra Bolt). Earlier bosses never bomb.
+  // Boss bomb params for L15-L22 bombing bosses. Pressure ramps with display level; L6/L12 never bomb.
   function bossBombParams(g) {
-    var hard = g.diff === 'hard', med = g.diff === 'medium', late = (g.level || 0) >= 21;
+    var hard = g.diff === 'hard', med = g.diff === 'medium';
+    var lv = g.level || 0, tier = Math.max(0, Math.min(7, lv - 14)); // L15..L22 → 0..7
+    var cdEasy = 5.5 - tier * 0.25, cdMed = 4.6 - tier * 0.25, cdHard = 4.0 - tier * 0.2;
+    var maxBombs = 1;
+    if (hard && tier >= 2) maxBombs = 2;
+    else if (med && tier >= 4) maxBombs = 2;
+    else if (tier >= 6) maxBombs = 2;
+    var range = (hard && tier >= 6) || (tier >= 7 && (hard || med)) ? 3 : 2;
     return {
-      max: late ? (hard ? 2 : med ? 2 : 1) : (hard ? 2 : 1),
-      cd: late ? (hard ? 2.6 : med ? 3.2 : 4.0) : (hard ? 3.5 : med ? 4.2 : 5.0),
-      range: late ? (hard ? 3 : 2) : 2,
+      max: maxBombs,
+      cd: hard ? cdHard : med ? cdMed : cdEasy,
+      range: range,
       fuse: BOMB_TIME
     };
   }
@@ -455,7 +469,7 @@
       if (atTile) want = enemyThink(g, e);
       if (e.type === 'boss') {
         if (e.bombCD > 0) e.bombCD -= dt;
-        e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) {
+        e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length, helpMax = g.helpersMax == null ? 2 : g.helpersMax; if (e.spawnT <= 0) { e.spawnT = (LEVELS[g.level] && LEVELS[g.level].spawnCD) || 12; if (helpers < helpMax) {
           var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) {
             if (c[0] < 1 || c[1] < 1 || c[0] >= W - 1 || c[1] >= H - 1) return false;
             if (g.map[c[1]][c[0]] !== FLOOR || bombAt(g, c[0], c[1])) return false;

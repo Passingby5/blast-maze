@@ -257,4 +257,72 @@ t('v12 boss HP and bomb ramp L15-L22', () => {
   assert(late.cd < early.cd && late.max >= early.max);
 });
 
+
+t('v13 R12-1 mid-move own-bomb box is rejected', () => {
+  const g = E.newStory(16, { seed: 31, difficulty: 'hard', carry: { bombs: 4, range: 5, speedUps: 0, kick: false, shield: 1, lives: 3, score: 0 } });
+  const p = g.players[0];
+  // Exact captured geometry from L17 Hard seed 31 at t=22.666s (QA R12-1)
+  Object.assign(p, { x: 1, y: 4.573333333333331, tx: 1, ty: 4, dir: 'u', face: 'u', speed: 3.2, speedUps: 0, kick: false, shield: 0, inv: 0, passBomb: 23, bombs: 5, range: 6, alive: true });
+  g.map[4][1] = g.map[5][1] = g.map[3][1] = E.FLOOR;
+  g.bombs = [{ id: 23, x: 1, y: 5, ox: 0, oy: 0, timer: 2.25, range: 6, owner: p.id, slide: null, sp: 0 }];
+  g.enemies.forEach(e => { if (e.type !== 'boss') e.alive = false; });
+  assert.strictEqual(E.passable(g, p, 0, 4), false);
+  assert.strictEqual(E.passable(g, p, 2, 4), false);
+  assert.strictEqual(E.playerHasBombEscape(g, 1, 3, 2, E.BOMB_TIME), false, 'must reject box between own bomb and new boss bomb');
+  assert(E.escapeReactionMargin(g, 1, 3, 2, E.BOMB_TIME) < E.BOSS_ESCAPE_REACT);
+  const boss = g.enemies.find(e => e.type === 'boss');
+  Object.assign(boss, { bombCD: 0, x: 7, y: 5, tx: 7, ty: 5, dir: null });
+  E.placeBossBomb(g, boss);
+  assert(!g.bombs.some(b => b.fromBoss && b.x === 1 && b.y === 3), 'must not place the R12-1 trapping bomb');
+});
+t('v13 R12-1 removing the boss bomb restores a delayed escape', () => {
+  const g0 = E.newStory(16, { seed: 31, difficulty: 'hard', carry: { bombs: 4, range: 5, speedUps: 0, kick: false, shield: 1, lives: 3, score: 0 } });
+  function setup(withBoss) {
+    const g = E.newStory(16, { seed: 31, difficulty: 'hard', carry: { bombs: 4, range: 5, speedUps: 0, kick: false, shield: 1, lives: 3, score: 0 } });
+    const p = g.players[0];
+    Object.assign(p, { x: 1, y: 4.573333333333331, tx: 1, ty: 4, dir: 'u', face: 'u', speed: 3.2, speedUps: 0, kick: false, shield: 0, inv: 0, passBomb: 23, bombs: 5, range: 6, alive: true, bot: false, human: true });
+    g.map[4][1] = g.map[5][1] = g.map[3][1] = g.map[3][3] = g.map[2][3] = E.FLOOR;
+    if (g.map[3][2] === E.CRATE) g.map[3][2] = E.FLOOR;
+    g.bombs = [{ id: 23, x: 1, y: 5, ox: 0, oy: 0, timer: 2.25, range: 6, owner: p.id, slide: null, sp: 0 }];
+    if (withBoss) g.bombs.push({ id: 24, x: 1, y: 3, ox: 0, oy: 0, timer: 2.4, range: 2, owner: 2, fromBoss: true, slide: null, sp: 0 });
+    g.enemies = []; g.portal = { x: 0, y: 0, open: false };
+    return g;
+  }
+  // Without the boss bomb, delayed Up then Right escapes the own-bomb blast
+  const g = setup(false);
+  const p = g.players[0];
+  const delay = 0.2;
+  let goals = [[1, 3], [3, 3], [3, 2]];
+  for (let n = 0; n < 210 && p.alive; n++) {
+    let dir = null;
+    if (n / 60 + 1e-9 >= delay) {
+      while (goals.length && p.x === goals[0][0] && p.y === goals[0][1]) goals.shift();
+      if (goals.length) {
+        const [x, y] = goals[0];
+        const d = x !== p.x ? (x > p.x ? 'r' : 'l') : (y > p.y ? 'd' : 'u');
+        dir = (p.x !== p.tx || p.y !== p.ty) ? (({ u: 'd', d: 'u', r: 'l', l: 'r' }[p.dir] === d) ? d : null) : d;
+      }
+    }
+    E.step(g, [{ dir }], 1 / 60);
+  }
+  assert(p.alive, 'removing the boss bomb must restore a 0.2s-delayed escape');
+  // With the boss bomb forced, the same delayed route dies
+  const g2 = setup(true);
+  const q = g2.players[0];
+  let goals2 = [[1, 3], [3, 3], [3, 2]];
+  for (let n = 0; n < 210 && q.alive; n++) {
+    let dir = null;
+    if (n / 60 + 1e-9 >= delay) {
+      while (goals2.length && q.x === goals2[0][0] && q.y === goals2[0][1]) goals2.shift();
+      if (goals2.length) {
+        const [x, y] = goals2[0];
+        const d = x !== q.x ? (x > q.x ? 'r' : 'l') : (y > q.y ? 'd' : 'u');
+        dir = (q.x !== q.tx || q.y !== q.ty) ? (({ u: 'd', d: 'u', r: 'l', l: 'r' }[q.dir] === d) ? d : null) : d;
+      }
+    }
+    E.step(g2, [{ dir }], 1 / 60);
+  }
+  assert(!q.alive, 'forced trapping bomb still kills after 0.2s — validator must refuse it');
+});
+
 console.log('unit tests passed:', n);

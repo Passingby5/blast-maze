@@ -241,78 +241,137 @@
       fuse: BOMB_TIME
     };
   }
-  // True if the player can reach a safe tile after BOSS_ESCAPE_REACT, treating the proposed bomb as
-  // solid. Every threatened tile on the path (including start) must be EXITED before its own blast
-  // time with at least BOSS_ESCAPE_REACT margin. Exit = cross the half-tile boundary (Math.round).
-  function playerHasBombEscape(g, bx, by, range, fuse) {
-    var p = g.players[0]; if (!p || !p.alive) return true;
+  // Tiles the player occupies or overlaps: rounded position, committed target, and
+  // floor/ceil neighbors of a fractional mid-move coordinate.
+  function playerOverlapTiles(p) {
+    var tiles = [], seen = {};
+    function add(x, y) {
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      var k = x + ',' + y; if (seen[k]) return; seen[k] = 1; tiles.push([x, y]);
+    }
+    add(Math.round(p.x), Math.round(p.y));
+    add(p.tx, p.ty);
+    add(Math.floor(p.x + 1e-6), Math.round(p.y));
+    add(Math.ceil(p.x - 1e-6), Math.round(p.y));
+    add(Math.round(p.x), Math.floor(p.y + 1e-6));
+    add(Math.round(p.x), Math.ceil(p.y - 1e-6));
+    return tiles;
+  }
+  function snapMove(p) {
+    return { x: p.x, y: p.y, tx: p.tx, ty: p.ty, dir: p.dir, face: p.face, passBomb: p.passBomb, anim: p.anim, kick: p.kick };
+  }
+  // Simulate unchanged input for `react` seconds. Does not kick (would mutate bombs).
+  function afterReactionMove(g, p, react) {
+    var snap = snapMove(p), ev = g.events;
+    g.events = []; p.kick = false;
+    moveEnt(g, p, p.dir, react);
+    var after = snapMove(p);
+    g.events = ev; Object.assign(p, snap);
+    return after;
+  }
+  // Kicked bombs: current tile is already solid via passable(); also treat the next
+  // slide tile as solid because it can arrive before the player can react.
+  function escapePassable(g, p, x, y) {
+    if (!passable(g, p, x, y)) return false;
+    for (var i = 0; i < g.bombs.length; i++) {
+      var b = g.bombs[i]; if (!b.slide) continue;
+      var d = DIRS[b.slide];
+      if (b.x + d[0] === x && b.y + d[1] === y) return false;
+    }
+    return true;
+  }
+  // dangerMap already counts every player and boss bomb. Project sliding bombs'
+  // future blast origins too — if unsure, treat the path as dangerous.
+  function dangerMapEscape(g, self) {
+    var dm = dangerMap(g, null, 0, self), i, s, b, d, x, y, steps, t;
+    for (i = 0; i < g.bombs.length; i++) {
+      b = g.bombs[i]; if (!b.slide || !DIRS[b.slide]) continue;
+      d = DIRS[b.slide]; x = b.x; y = b.y; t = b.timer;
+      steps = Math.min(10, Math.ceil((t + 0.05) * KICK_SPEED));
+      for (s = 0; s < steps; s++) {
+        x += d[0]; y += d[1];
+        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || g.map[y][x] !== FLOOR) break;
+        if (bombAt(g, x, y)) break;
+        blastTiles(g, x, y, b.range).forEach(function (cell) {
+          if (t < dm[cell[1]][cell[0]]) dm[cell[1]][cell[0]] = t;
+        });
+      }
+    }
+    return dm;
+  }
+  // Escape search after a BOSS_ESCAPE_REACT delay of unchanged input. Models mid-move
+  // fractional position, committed momentum, overlap tiles, and all existing bombs as
+  // solid (passBomb only if still on that bomb after the delay). If unsure, reject.
+  // Returns the best blast-exit slack (seconds); < react means no fair escape.
+  function bombEscapeSearch(g, bx, by, range, fuse) {
+    var p = g.players[0]; if (!p || !p.alive) return Infinity;
     var fake = { id: -99001, x: bx, y: by, timer: fuse, range: range, owner: 'boss', fromBoss: true, slide: null, sp: 0 };
-    var underfoot = Math.round(p.x) === bx && Math.round(p.y) === by, savedPass = p.passBomb;
-    g.bombs.push(fake); if (underfoot) p.passBomb = fake.id;
+    var saved = snapMove(p);
+    g.bombs.push(fake);
+    var overlaps = playerOverlapTiles(p), oi;
+    for (oi = 0; oi < overlaps.length; oi++) if (overlaps[oi][0] === bx && overlaps[oi][1] === by) { p.passBomb = fake.id; break; }
     try {
-      var dm = dangerMap(g, null, 0, p.id), tm = threatMap(g, p);
+      var after = afterReactionMove(g, p, BOSS_ESCAPE_REACT);
+      Object.assign(p, after); p.kick = false;
+      var dm = dangerMapEscape(g, p.id), tm = threatMap(g, p);
       var react = BOSS_ESCAPE_REACT, st = 1 / p.speed, half = 0.5 / p.speed;
-      var frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
-      // Time to first leave the current rounded cell after reacting
-      var leaveStart = react + (frac > 0.05 ? Math.max(0.02, Math.min(half, frac)) : half);
-      if (dm[p.ty][p.tx] < Infinity && leaveStart > dm[p.ty][p.tx] - react) return false;
-      if (dm[p.ty][p.tx] === Infinity && !tm[p.ty][p.tx]) return true;
+      var starts = [], frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
+      var preSlack = Infinity, ot = playerOverlapTiles(p);
+      for (oi = 0; oi < ot.length; oi++) {
+        var tx0 = ot[oi][0], ty0 = ot[oi][1];
+        if (tx0 === p.tx && ty0 === p.ty) continue;
+        var leaveT = react + half;
+        if (p.tx !== tx0) leaveT = react + Math.abs(p.x - (tx0 + (p.tx > tx0 ? 0.5 : -0.5))) * st;
+        else if (p.ty !== ty0) leaveT = react + Math.abs(p.y - (ty0 + (p.ty > ty0 ? 0.5 : -0.5))) * st;
+        if (dm[ty0][tx0] < Infinity) preSlack = Math.min(preSlack, dm[ty0][tx0] - leaveT);
+      }
+      if (preSlack >= react) starts.push({ x: p.tx, y: p.ty, d: 0, tCenter: react + frac * st, slack: preSlack });
+      if (frac > 1e-6 && p.dir && DIRS[p.dir]) {
+        var od = DIRS[p.dir], rx = p.tx - od[0], ry = p.ty - od[1];
+        if (escapePassable(g, p, rx, ry) && !tm[ry][rx]) {
+          var tRev = react + (Math.abs(p.x - rx) + Math.abs(p.y - ry)) * st;
+          starts.push({ x: rx, y: ry, d: 0, tCenter: tRev, slack: Infinity });
+        }
+      }
+      if (!starts.length) return -Infinity;
+      var safeAt = true;
+      for (oi = 0; oi < starts.length; oi++) {
+        var s0 = starts[oi];
+        if (!(dm[s0.y][s0.x] === Infinity && !tm[s0.y][s0.x] && s0.slack >= react && frac < 1e-6)) safeAt = false;
+      }
+      if (safeAt && starts.length) return Infinity;
       var limit = Math.max(1, Math.floor((Math.min(fuse, 8) + 1) / st));
-      var seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0 }]; seen[p.ty][p.tx] = true;
+      var best = -Infinity, seen = grid(false), q = starts.slice(), qi;
+      for (qi = 0; qi < starts.length; qi++) seen[starts[qi].y][starts[qi].x] = true;
       while (q.length) {
         var c = q.shift();
         if (c.d >= limit) continue;
-        // Time at this tile's center (d=0: already here before moving)
-        var atCenter = c.d === 0 ? 0 : react + c.d * st;
+        var atCenter = c.tCenter;
         for (var i = 0; i < 4; i++) {
           var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
-          if (seen[ny][nx] || !passable(g, p, nx, ny) || tm[ny][nx]) continue;
-          // Leave current cell across the half-tile boundary
-          var leaveC = (c.d === 0 ? leaveStart : atCenter + half);
-          if (dm[c.y][c.x] < Infinity && leaveC > dm[c.y][c.x] - react) continue;
-          // Crossing into a safe tile at leaveC is success
-          if (dm[ny][nx] === Infinity) return true;
-          // Threatened neighbor: must also be able to EXIT it later with the same margin
-          var arriveN = react + (c.d + 1) * st, leaveN = arriveN + half;
-          if (leaveN > dm[ny][nx] - react) continue;
-          seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1 });
+          if (seen[ny][nx] || !escapePassable(g, p, nx, ny) || tm[ny][nx]) continue;
+          var leaveC = atCenter + half, slack = c.slack;
+          if (dm[c.y][c.x] < Infinity) slack = Math.min(slack, dm[c.y][c.x] - leaveC);
+          if (dm[ny][nx] === Infinity) { if (slack > best) best = slack; continue; }
+          var arriveN = atCenter + st, leaveN = arriveN + half;
+          slack = Math.min(slack, dm[ny][nx] - leaveN);
+          if (slack < react) continue;
+          seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1, tCenter: arriveN, slack: slack });
         }
       }
-      return false;
-    } finally { g.bombs.pop(); p.passBomb = savedPass; }
+      return best;
+    } finally {
+      g.bombs.pop();
+      Object.assign(p, saved);
+    }
+  }
+  function playerHasBombEscape(g, bx, by, range, fuse) {
+    return bombEscapeSearch(g, bx, by, range, fuse) >= BOSS_ESCAPE_REACT - 1e-9;
   }
   // Minimum blast-exit slack (seconds) along the best escape path; < react means unsafe.
   // Used by tests/fuzz. Returns Infinity if already safe / no player.
   function escapeReactionMargin(g, bx, by, range, fuse) {
-    var p = g.players[0]; if (!p || !p.alive) return Infinity;
-    var fake = { id: -99002, x: bx, y: by, timer: fuse, range: range, owner: 'boss', fromBoss: true, slide: null, sp: 0 };
-    var underfoot = Math.round(p.x) === bx && Math.round(p.y) === by, savedPass = p.passBomb;
-    g.bombs.push(fake); if (underfoot) p.passBomb = fake.id;
-    try {
-      var dm = dangerMap(g, null, 0, p.id), tm = threatMap(g, p);
-      var react = BOSS_ESCAPE_REACT, st = 1 / p.speed, half = 0.5 / p.speed;
-      var frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
-      var leaveStart = react + (frac > 0.05 ? Math.max(0.02, Math.min(half, frac)) : half);
-      if (dm[p.ty][p.tx] === Infinity && !tm[p.ty][p.tx]) return Infinity;
-      var best = -Infinity, seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0, slack: Infinity }];
-      seen[p.ty][p.tx] = true;
-      while (q.length) {
-        var c = q.shift(), atCenter = c.d === 0 ? 0 : react + c.d * st;
-        for (var i = 0; i < 4; i++) {
-          var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
-          if (seen[ny][nx] || !passable(g, p, nx, ny) || tm[ny][nx]) continue;
-          var leaveC = (c.d === 0 ? leaveStart : atCenter + half);
-          var slack = c.slack;
-          if (dm[c.y][c.x] < Infinity) slack = Math.min(slack, dm[c.y][c.x] - leaveC);
-          if (dm[ny][nx] === Infinity) { if (slack > best) best = slack; continue; }
-          var arriveN = react + (c.d + 1) * st, leaveN = arriveN + half;
-          slack = Math.min(slack, dm[ny][nx] - leaveN);
-          if (slack < 0) continue;
-          seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1, slack: slack });
-        }
-      }
-      return best;
-    } finally { g.bombs.pop(); p.passBomb = savedPass; }
+    return bombEscapeSearch(g, bx, by, range, fuse);
   }
   function tileClaimed(g, x, y, ignore) {
     var list = g.players.concat(g.enemies), i, o;
@@ -474,11 +533,18 @@
             if (c[0] < 1 || c[1] < 1 || c[0] >= W - 1 || c[1] >= H - 1) return false;
             if (g.map[c[1]][c[0]] !== FLOOR || bombAt(g, c[0], c[1])) return false;
             if (tileClaimed(g, c[0], c[1], e)) return false;
-            // Never spawn on or next to the player (contact would kill that frame)
+            // Never spawn on or next to the player (current, committed, or after 0.2s of motion)
             for (var pi = 0; pi < g.players.length; pi++) {
               var pl = g.players[pi]; if (!pl.alive) continue;
               if (Math.abs(pl.x - c[0]) + Math.abs(pl.y - c[1]) < 1.25) return false;
               if (Math.abs(pl.tx - c[0]) + Math.abs(pl.ty - c[1]) <= 1) return false;
+              var predX = pl.x, predY = pl.y;
+              if (pl.dir && DIRS[pl.dir]) {
+                predX = pl.x + DIRS[pl.dir][0] * pl.speed * BOSS_ESCAPE_REACT;
+                predY = pl.y + DIRS[pl.dir][1] * pl.speed * BOSS_ESCAPE_REACT;
+              }
+              if (Math.abs(predX - c[0]) + Math.abs(predY - c[1]) < 1.25) return false;
+              if (Math.abs(Math.round(predX) - c[0]) + Math.abs(Math.round(predY) - c[1]) <= 1) return false;
             }
             return true;
           })[0];

@@ -91,3 +91,6 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 
 ### Added in v12 (bombing bosses on L15-L22)
 55. Levels 15-22 each have a bombing boss (Spark Bolt through Ultra Bolt End). L17 remains Mid Bolt and L22 remains Ultra Bolt End as the strongest. L6 and L12 bosses still do not bomb. Boss HP, bomb cooldown/max/range, and helper summoning ramp across L15-L22. Clear rule unchanged: defeat the boss and all critters, then take the portal. (unit + sim + boss-safety)
+
+### Added in v13 (R12-1 mid-move escape)
+56. Boss-bomb escape models the player's real mid-move position after 0.2 s of unchanged input: fractional coordinates, committed momentum, every overlapped tile, and all existing player and boss bombs as solid (temporary own-bomb passage is not kept after leaving that tile). Kicked-bomb next tiles are treated as solid and their future blast origins are counted. If the search cannot prove a 0.2 s exit margin, the bomb is not placed. Helper summons also avoid the player's predicted post-reaction tile. (unit R12-1 + boss-safety mid-move fuzz)

@@ -36,6 +36,21 @@ for (const lv of [14, 15, 16, 17, 18, 19, 20, 21]) for (const diff of ['easy', '
   p.inv = 0; p.shield = 0;
   p.x = p.tx = 5 + (s % 5); p.y = p.ty = 3 + (s % 4);
   if (g.map[p.ty][p.tx] !== E.FLOOR) { p.x = p.tx = 5; p.y = p.ty = 5; }
+  // Mid-move / fractional samples: committed step plus leftover pass on an own bomb
+  if (s % 2 === 0) {
+    const dirs = ['u', 'd', 'l', 'r'], dir = dirs[s % 4], d = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] }[dir];
+    const ox = p.tx - d[0], oy = p.ty - d[1];
+    if (ox > 0 && oy > 0 && ox < E.W - 1 && oy < E.H - 1 && g.map[oy][ox] === E.FLOOR) {
+      p.dir = dir; p.face = dir;
+      p.x = p.tx - d[0] * (0.25 + (s % 5) * 0.08);
+      p.y = p.ty - d[1] * (0.25 + (s % 5) * 0.08);
+      if (s % 4 === 0 && !g.bombs.some(b => b.x === ox && b.y === oy)) {
+        const id = g.nextId++;
+        g.bombs.push({ id, x: ox, y: oy, timer: 2.1 + (s % 4) * 0.05, range: 3, owner: p.id, slide: null, sp: 0 });
+        p.passBomb = id;
+      }
+    }
+  }
   if (E.placeBossBomb(g, boss)) {
     placed++;
     const bb = g.bombs.find(b => b.fromBoss);

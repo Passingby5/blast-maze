@@ -115,4 +115,98 @@ t('v9 save accepts levels through 21', () => {
   assert(S.cleanStory({ level: 12, difficulty: 'medium', carry: good }));
 });
 
+
+t('v10 R9-1 escape treats proposed bomb as solid', () => {
+  const g = E.newStory(16, { seed: 20324378, difficulty: 'medium' });
+  for (let i = 0; i < 93; i++) E.step(g, [{ dir: 'r' }], 1 / 60);
+  for (let i = 0; i < 100; i++) E.step(g, [{}], 1 / 60);
+  assert.strictEqual(E.playerHasBombEscape(g, 4, 1, 2, E.BOMB_TIME), false);
+  const boss = g.enemies.find(e => e.type === 'boss'); boss.bombCD = 0;
+  E.placeBossBomb(g, boss);
+  assert(!g.bombs.some(b => b.fromBoss && b.x === 4 && b.y === 1));
+});
+t('v10 R9-1 natural corner not unavoidable', () => {
+  const seed = 20324378;
+  function toFrame() {
+    const g = E.newStory(16, { seed, difficulty: 'medium' });
+    for (let i = 0; i < 93; i++) E.step(g, [{ dir: 'r' }], 1 / 60);
+    for (let i = 0; i < 100; i++) E.step(g, [{}], 1 / 60);
+    return g;
+  }
+  const g0 = toFrame();
+  if (!g0.bombs.some(b => b.fromBoss)) return; // no bomb is also fine
+  let survivor = false;
+  for (const dir of [null, 'u', 'd', 'l', 'r']) {
+    const g = toFrame();
+    for (let n = 0; n < 180 && g.status === 'play'; n++) E.step(g, [{ dir }], 1 / 60);
+    if (g.players[0].alive) survivor = true;
+  }
+  assert(survivor, 'at least one immediate direction must survive');
+});
+t('v10 R9-2 boss bombs keep reaction fuse on chain', () => {
+  const g = E.newStory(16, { seed: 3, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] === E.CRATE) g.map[y][x] = E.FLOOR;
+  const boss = g.enemies.find(e => e.type === 'boss'), p = g.players[0];
+  Object.assign(p, { x: 9, y: 5, tx: 9, ty: 5, shield: 0, inv: 0, speed: 3.2 });
+  Object.assign(boss, { x: 11, y: 5, tx: 11, ty: 5, bombCD: 99, speed: 0.0001 });
+  g.enemies = [boss];
+  g.bombs = [
+    { id: 6, x: 5, y: 5, timer: 0.04, range: 3, owner: p.id, slide: null, sp: 0 },
+    { id: 7, x: 8, y: 5, timer: 2.4, range: 2, owner: boss.id, fromBoss: true, slide: null, sp: 0 }
+  ];
+  let survivor = false, early = false;
+  for (const dir of [null, 'u', 'd', 'l', 'r']) {
+    const t = E.newStory(16, { seed: 3, difficulty: 'medium' });
+    for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (t.map[y][x] === E.CRATE) t.map[y][x] = E.FLOOR;
+    const b = t.enemies.find(e => e.type === 'boss'), q = t.players[0];
+    Object.assign(q, { x: 9, y: 5, tx: 9, ty: 5, shield: 0, inv: 0, speed: 3.2 });
+    Object.assign(b, { x: 11, y: 5, tx: 11, ty: 5, bombCD: 99, speed: 0.0001 });
+    t.enemies = [b];
+    t.bombs = [
+      { id: 6, x: 5, y: 5, timer: 0.04, range: 3, owner: q.id, slide: null, sp: 0 },
+      { id: 7, x: 8, y: 5, timer: 2.4, range: 2, owner: b.id, fromBoss: true, slide: null, sp: 0 }
+    ];
+    for (let n = 0; n < 8 && t.status === 'play'; n++) E.step(t, [{ dir }], 1 / 60);
+    if (!q.alive && t.t <= 0.1) early = true;
+    for (let n = 0; n < 60 && t.status === 'play'; n++) E.step(t, [{ dir }], 1 / 60);
+    if (q.alive) survivor = true;
+  }
+  assert(!early, 'no sub-0.1s unavoidable chain death');
+  assert(survivor, 'at least one direction escapes after chain floor');
+  assert.strictEqual(E.BOSS_CHAIN_MIN, 0.55);
+});
+t('v10 R9-3 helper never spawns on or next to player', () => {
+  const g = E.newStory(16, { seed: 1, difficulty: 'hard' });
+  const boss = g.enemies.find(e => e.type === 'boss'), p = g.players[0];
+  g.enemies = [boss]; g.bossBombs = false;
+  Object.assign(boss, { x: 11, y: 9, tx: 11, ty: 9, dir: null, spawnT: 0 });
+  g.map[9][11] = g.map[9][12] = E.FLOOR;
+  Object.assign(p, { x: 12, y: 9, tx: 12, ty: 9, shield: 0, inv: 0 });
+  E.step(g, [{}], 1 / 60);
+  assert(p.alive);
+  assert(!g.events.some(e => e.t === 'ko' || e.t === 'lose'));
+  g.enemies.forEach(e => {
+    if (e.type === 'boss') return;
+    assert(Math.abs(e.x - p.x) + Math.abs(e.y - p.y) >= 1.25);
+  });
+});
+t('v10 R9-4 boss bomb not placed on committed hunter tile', () => {
+  const g = E.newStory(16, { seed: 3, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] === E.CRATE) g.map[y][x] = E.FLOOR;
+  const boss = g.enemies.find(e => e.type === 'boss'), ch = g.enemies.find(e => e.type === 'chaser'), p = g.players[0];
+  Object.assign(p, { x: 9, y: 5, tx: 9, ty: 5, inv: 99 });
+  Object.assign(boss, { x: 12, y: 5, tx: 12, ty: 5, bombCD: 0 });
+  Object.assign(ch, { x: 7.1, y: 5, tx: 8, ty: 5, dir: 'r', speed: 2.5 });
+  g.enemies = [boss, ch];
+  const placed = E.placeBossBomb(g, boss);
+  if (placed) assert(!g.bombs.some(b => b.fromBoss && b.x === 8 && b.y === 5));
+});
+t('v10 best score sanitized', () => {
+  const mem = {}; const st = { getItem: k => mem[k] ?? null, setItem: (k, v) => mem[k] = String(v) };
+  mem[S.KEY] = JSON.stringify({ v: S.VERSION, best: 'Infinity', settings: { muted: false, difficulty: 'medium', calm: false }, story: null });
+  assert.strictEqual(S.read(st).best, 0);
+  mem[S.KEY] = JSON.stringify({ v: S.VERSION, best: -12, settings: { muted: false, difficulty: 'medium', calm: false }, story: null });
+  assert.strictEqual(S.read(st).best, 0);
+});
+
 console.log('unit tests passed:', n);

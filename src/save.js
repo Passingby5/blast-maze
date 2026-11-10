@@ -5,7 +5,7 @@
   function read(st) {
     var d = fresh(); try { var raw = st.getItem(KEY); if (!raw) return d; var o = JSON.parse(raw); if (!o || o.v !== VERSION) return d;
       if (o.settings) { d.settings.muted = !!o.settings.muted; d.settings.calm = o.settings.calm === true; if (['easy', 'medium', 'hard'].indexOf(o.settings.difficulty) >= 0) d.settings.difficulty = o.settings.difficulty; }
-      d.best = +o.best || 0;
+      var best = +o.best; d.best = (typeof best === 'number' && isFinite(best) && best >= 0) ? Math.min(9999999, Math.floor(best)) : 0;
       d.story = cleanStory(o.story);
     } catch (e) { } return d;
   }

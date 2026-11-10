@@ -14,6 +14,8 @@
   // 22 story levels. b=blob, c=chaser, g=ghost, boss=true, spd=per-level speed mul, bossBombs=boss may place bombs.
   // SPEED_CAP keeps Hard late chasers just above player base so the player can still outrun without Speed ups.
   var SPEED_CAP = 3.30;
+  // Boss bombs chained by other blasts keep at least this much fuse (seconds) so the player can react.
+  var BOSS_CHAIN_MIN = 0.55, BOSS_ESCAPE_REACT = 0.2;
   var LEVELS = [
     { name: 'Sunny Start', crates: 0.45, b: 2, c: 0, g: 0 },
     { name: 'Crate Garden', crates: 0.55, b: 3, c: 0, g: 0 },
@@ -173,7 +175,11 @@
     tiles.forEach(function (t) {
       var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.fromBoss ? 'boss' : b.owner;
       if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); var ow = byId(g, b.owner); if (ow) { ow.pts += 10; ow.crates++; } if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
-      var o = bombAt(g, x, y); if (o && o.timer > 0) o.timer = 0;
+      var o = bombAt(g, x, y); if (o && o.timer > 0) {
+        // Boss bombs never chain to 0: keep a reaction window so the player can move.
+        if (o.fromBoss) o.timer = Math.min(o.timer, BOSS_CHAIN_MIN);
+        else o.timer = 0;
+      }
     });
     g.events.push({ t: 'boom', x: b.x, y: b.y, tiles: tiles, owner: b.owner }); g.shake = Math.min(1, g.shake + 0.45);
   }
@@ -221,23 +227,41 @@
       fuse: BOMB_TIME
     };
   }
-  // True if the player can reach a tile outside the simulated blast before the fuse runs out.
+  // True if the player can reach a tile outside the simulated blast before it hits, treating the
+  // proposed bomb as a real occupied tile, including chain timing, reaction time, and hunter contact.
   function playerHasBombEscape(g, bx, by, range, fuse) {
     var p = g.players[0]; if (!p || !p.alive) return true;
-    var dm = dangerMap(g, { x: bx, y: by, timer: fuse, range: range }, 0, p.id);
-    var st = 1 / p.speed, limit = Math.max(1, Math.floor((fuse - 0.55) / st));
-    var seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0 }]; seen[p.ty][p.tx] = true;
-    while (q.length) {
-      var c = q.shift();
-      if (dm[c.y][c.x] === Infinity) return true; // safe tile outside any blast
-      if (c.d >= limit) continue;
-      for (var i = 0; i < 4; i++) {
-        var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
-        if (seen[ny][nx] || !passable(g, p, nx, ny)) continue;
-        var arrive = (c.d + 1) * st;
-        if (dm[ny][nx] <= arrive + 0.05) continue; // would enter a tile as it explodes
-        seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1 });
+    var fake = { id: -99001, x: bx, y: by, timer: fuse, range: range, owner: 'boss', fromBoss: true, slide: null, sp: 0 };
+    var underfoot = Math.round(p.x) === bx && Math.round(p.y) === by, savedPass = p.passBomb;
+    g.bombs.push(fake); if (underfoot) p.passBomb = fake.id;
+    try {
+      var dm = dangerMap(g, null, 0, p.id), tm = threatMap(g, p);
+      var frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
+      var leaveNeed = (frac > 0.05 ? frac / p.speed : 1 / p.speed) + BOSS_ESCAPE_REACT;
+      if (dm[p.ty][p.tx] < leaveNeed) return false; // current tile explodes before the player can leave
+      var st = 1 / p.speed, limit = Math.max(1, Math.floor((Math.min(fuse, 8) - BOSS_ESCAPE_REACT) / st));
+      var seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0 }]; seen[p.ty][p.tx] = true;
+      while (q.length) {
+        var c = q.shift();
+        if (dm[c.y][c.x] === Infinity && !tm[c.y][c.x]) return true;
+        if (c.d >= limit) continue;
+        for (var i = 0; i < 4; i++) {
+          var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
+          if (seen[ny][nx] || !passable(g, p, nx, ny)) continue;
+          var arrive = (c.d + 1) * st + BOSS_ESCAPE_REACT;
+          if (dm[ny][nx] <= arrive + 0.05) continue;
+          if (tm[ny][nx]) continue; // never path through hunter/boss contact tiles
+          seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1 });
+        }
       }
+      return false;
+    } finally { g.bombs.pop(); p.passBomb = savedPass; }
+  }
+  function tileClaimed(g, x, y, ignore) {
+    var list = g.players.concat(g.enemies), i, o;
+    for (i = 0; i < list.length; i++) {
+      o = list[i]; if (!o.alive || o === ignore) continue;
+      if ((Math.round(o.x) === x && Math.round(o.y) === y) || (o.tx === x && o.ty === y)) return true;
     }
     return false;
   }
@@ -247,12 +271,12 @@
     for (i = 0; i < g.bombs.length; i++) if (g.bombs[i].fromBoss) active++;
     if (active >= P.max || boss.bombCD > 0) return false;
     var p = g.players[0]; if (!p || !p.alive) return false;
-    // Candidates: tiles near the player, plus open tiles next to the boss along a line toward the player.
     var cands = [], x, y, d, px = Math.round(p.x), py = Math.round(p.y);
     function consider(x, y) {
       if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return;
       if (g.map[y][x] !== FLOOR || bombAt(g, x, y)) return;
       if (x === boss.tx && y === boss.ty) return;
+      if (tileClaimed(g, x, y, boss)) return; // never materialize onto a body or committed step
       d = Math.abs(x - px) + Math.abs(y - py);
       if (d < 1) return;
       var hits = false, tiles = blastTiles(g, x, y, P.range);
@@ -265,20 +289,19 @@
       d = Math.abs(x - px) + Math.abs(y - py);
       if (d >= 1 && d <= P.range + 3) consider(x, y);
     }
-    // Also try stepping from the boss toward the player up to range+1
     DKEYS.forEach(function (k) {
       var dir = DIRS[k];
       for (var step = 1; step <= P.range + 1; step++) consider(boss.tx + dir[0] * step, boss.ty + dir[1] * step);
     });
-    if (!cands.length) return false;
-    // Prefer closer threats the boss can still reach conceptually; avoid identical picks
+    if (!cands.length) return false; // if unsure / no safe placement, do not place
     var uniq = {}, list = [];
-    cands.forEach(function (c) { var key = c.x + "," + c.y; if (!uniq[key]) { uniq[key] = 1; list.push(c); } });
+    cands.forEach(function (c) { var key = c.x + ',' + c.y; if (!uniq[key]) { uniq[key] = 1; list.push(c); } });
     list.sort(function (a, b) { return (a.d - b.d) || (a.nearBoss - b.nearBoss); });
     var pick = list[Math.min(list.length - 1, g.rng.int(Math.min(4, list.length)))];
+    // Final re-check right before commit (state may include hunters)
+    if (!playerHasBombEscape(g, pick.x, pick.y, P.range, P.fuse) || tileClaimed(g, pick.x, pick.y, boss)) return false;
     var b = { id: g.nextId++, x: pick.x, y: pick.y, ox: 0, oy: 0, timer: P.fuse, range: P.range, owner: boss.id, fromBoss: true, slide: null, sp: 0 };
     g.bombs.push(b); boss.bombCD = P.cd; boss.passBomb = b.id;
-    // Let the player walk off if standing on the tile (rare); boss can leave if adjacent placement fails and lands underfoot
     if (Math.round(p.x) === pick.x && Math.round(p.y) === pick.y) p.passBomb = b.id;
     g.events.push({ t: 'place', x: pick.x, y: pick.y, fromBoss: true });
     return true;
@@ -286,13 +309,15 @@
 
   // ---------- CPU / bot brain ----------
   function dangerMap(g, extra, see, self) {
-    var dm = grid(Infinity), bombs = g.bombs.filter(function (b) { return !see || b.timer <= see || b.owner === self; }).map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range }; });
-    if (extra) bombs.push(extra);
+    var dm = grid(Infinity), bombs = g.bombs.filter(function (b) { return !see || b.timer <= see || b.owner === self; }).map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range, fromBoss: !!b.fromBoss }; });
+    if (extra) bombs.push({ x: extra.x, y: extra.y, timer: extra.timer, range: extra.range, fromBoss: !!extra.fromBoss });
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) if (g.flames[y][x] > 0) dm[y][x] = 0;
     if (g.mode === 'battle' && g.timeLeft <= SHRINK_AT + 3) for (var si = g.shrinkI; si < Math.min(g.shrink.length - 1, g.shrinkI + 14); si++) { var sc = g.shrink[si]; dm[sc[1]][sc[0]] = Math.min(dm[sc[1]][sc[0]], 0.8); }
     bombs.sort(function (a, b) { return a.timer - b.timer; });
-    for (var pass = 0; pass < 2; pass++) bombs.forEach(function (b) {
-      var t = Math.min(b.timer, dm[b.y][b.x]); b.timer = t;
+    for (var pass = 0; pass < 3; pass++) bombs.forEach(function (b) {
+      var hit = dm[b.y][b.x], t = b.timer;
+      if (hit < t) t = b.fromBoss ? Math.min(t, hit + BOSS_CHAIN_MIN) : hit;
+      b.timer = t;
       blastTiles(g, b.x, b.y, b.range).forEach(function (s) { if (t < dm[s[1]][s[0]]) dm[s[1]][s[0]] = t; });
     });
     return dm;
@@ -387,7 +412,22 @@
       if (atTile) want = enemyThink(g, e);
       if (e.type === 'boss') {
         if (e.bombCD > 0) e.bombCD -= dt;
-        e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) { var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) { return g.map[c[1]][c[0]] === FLOOR && !bombAt(g, c[0], c[1]); })[0]; if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff, (LEVELS[g.level] && LEVELS[g.level].spd) || 1)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); } } }
+        e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) {
+          var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) {
+            if (c[0] < 1 || c[1] < 1 || c[0] >= W - 1 || c[1] >= H - 1) return false;
+            if (g.map[c[1]][c[0]] !== FLOOR || bombAt(g, c[0], c[1])) return false;
+            if (tileClaimed(g, c[0], c[1], e)) return false;
+            // Never spawn on or next to the player (contact would kill that frame)
+            for (var pi = 0; pi < g.players.length; pi++) {
+              var pl = g.players[pi]; if (!pl.alive) continue;
+              if (Math.abs(pl.x - c[0]) + Math.abs(pl.y - c[1]) < 1.25) return false;
+              if (Math.abs(pl.tx - c[0]) + Math.abs(pl.ty - c[1]) <= 1) return false;
+            }
+            return true;
+          })[0];
+          if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff, (LEVELS[g.level] && LEVELS[g.level].spd) || 1)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); }
+          else e.spawnT = 2.5; // defer when every adjacent cell is unsafe
+        } }
         if (g.bossBombs && atTile) placeBossBomb(g, e);
       }
       moveEnt(g, e, want, dt);
@@ -450,7 +490,7 @@
     return seen[g.portal.y][g.portal.x] && g.enemies.every(function (e) { return seen[e.ty][e.tx]; });
   }
 
-  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, SPEED_CAP: SPEED_CAP, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
+  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, SPEED_CAP: SPEED_CAP, BOSS_CHAIN_MIN: BOSS_CHAIN_MIN, BOSS_ESCAPE_REACT: BOSS_ESCAPE_REACT, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
     RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, placeBossBomb: placeBossBomb, playerHasBombEscape: playerHasBombEscape, bossBombParams: bossBombParams, enemySpeed: enemySpeed, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.BM = root.BM || {}; root.BM.Engine = api; }
 })(this);

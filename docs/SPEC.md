@@ -78,3 +78,10 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 46. Story mode has 22 levels. Levels 1-12 match v8. Levels 13-22 ramp enemy speed (per-level spd, Hard capped at 3.30) and chaser counts (2 up to 5). Bosses on levels 6, 12, 17 and 22. (unit + sim)
 47. Bosses on level 17 (Mid Bolt) and level 22 (Ultra Bolt End) drop their own bombs. Boss bombs use a purple/magenta glow and a diamond-with-X mark so they stay distinct from cyan player bombs for colorblind players. Same blast rules; boss is immune to its own bombs; placement requires a player escape path; cooldown and max bombs ramp by difficulty and are harder on L22. Levels 6 and 12 bosses never bomb. (unit + sim)
 48. Save format stays v2 and accepts story levels 0-21. Win screen says 22 levels / Ultra Bolt. Themes cycle every 3 levels. (unit + browser)
+
+### Added in v10 (QA R9 safety fixes)
+49. Boss-bomb escape check treats the proposed bomb as a solid tile, budgets reaction time and leave-tile time, uses chain-aware danger times, and refuses hunter-contact paths. If unsure, the boss does not place. (unit + boss-safety)
+50. Boss bombs chained by other blasts keep at least BOSS_CHAIN_MIN (0.55 s) fuse — never an instant 0-timer chain kill. (unit + boss-safety)
+51. Boss helpers never spawn on or next to the player (or other occupants); summon defers when every adjacent cell is unsafe. (unit)
+52. Boss bombs are not materialized onto a tile another entity occupies or is committed to step onto. (unit)
+53. Best score is finite, nonnegative, and clamped. Sim carry clamps speedUps to 4. (unit + sim)

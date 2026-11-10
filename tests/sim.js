@@ -3,7 +3,7 @@ const E = require('../src/engine.js'), assert = require('assert');
 const SEEDS = +process.env.SEEDS || 12, DT = 1 / 60;
 let cleared = new Array(E.LEVELS.length).fill(0), games = 0;
 for (const diff of ['easy', 'medium', 'hard']) for (let lv = 0; lv < E.LEVELS.length; lv++) for (let s = 1; s <= SEEDS; s++) {
-  const g = E.newStory(lv, { seed: s, difficulty: diff, carry: lv > 0 ? { bombs: 1 + (lv >> 2), range: 2 + (lv >> 2), speedUps: lv >> 2, kick: false, shield: 1, lives: 3, score: 0 } : null });
+  const g = E.newStory(lv, { seed: s, difficulty: diff, carry: lv > 0 ? { bombs: Math.min(8, 1 + (lv >> 2)), range: Math.min(8, 2 + (lv >> 2)), speedUps: Math.min(4, lv >> 2), kick: false, shield: 1, lives: 3, score: 0 } : null });
   assert(E.solvable(g), 'level ' + lv + ' unsolvable seed ' + s);
   g.players[0].bot = true; let n = 0;
   while (g.status === 'play') { E.step(g, [], DT); if (++n > 60 * (E.STORY_TIME + 2)) throw new Error('softlock story ' + lv + ' ' + s); }

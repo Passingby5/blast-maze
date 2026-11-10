@@ -11,7 +11,9 @@
     hard: { espeed: 1.2, chase: 0.85, cpuMiss: 0.0, cpuThink: 0.05, lives: 2, see: 99, react: 0, cpuBombs: 8, hunt: 1, huntRange: 99, aim: 1, hesitate: 0 }
   };
   var ETYPES = { blob: { speed: 1.9, pts: 100 }, chaser: { speed: 2.3, pts: 200 }, ghost: { speed: 1.7, pts: 300, ghost: true }, boss: { speed: 1.5, pts: 2000, hp: 6 } };
-  // 12 story levels. b=blob, c=chaser, g=ghost, boss=true. crates = density.
+  // 22 story levels. b=blob, c=chaser, g=ghost, boss=true, spd=per-level speed mul, bossBombs=boss may place bombs.
+  // SPEED_CAP keeps Hard late chasers just above player base so the player can still outrun without Speed ups.
+  var SPEED_CAP = 3.30;
   var LEVELS = [
     { name: 'Sunny Start', crates: 0.45, b: 2, c: 0, g: 0 },
     { name: 'Crate Garden', crates: 0.55, b: 3, c: 0, g: 0 },
@@ -24,7 +26,17 @@
     { name: 'Chase Lane', crates: 0.5, b: 0, c: 4, g: 1 },
     { name: 'Ghost Town', crates: 0.6, b: 1, c: 1, g: 4 },
     { name: 'Crowded Maze', crates: 0.55, b: 3, c: 3, g: 2 },
-    { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true }
+    { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true },
+    { name: 'Hot Pursuit', crates: 0.5, b: 2, c: 2, g: 0, spd: 1.08 },
+    { name: 'Faster Footing', crates: 0.55, b: 2, c: 2, g: 1, spd: 1.12 },
+    { name: 'Triple Trail', crates: 0.55, b: 1, c: 3, g: 1, spd: 1.16 },
+    { name: 'Pressure Cooker', crates: 0.6, b: 2, c: 3, g: 1, spd: 1.20 },
+    { name: 'Mid Bolt', crates: 0.35, b: 0, c: 2, g: 1, boss: true, bossBombs: true, spd: 1.25 },
+    { name: 'Pack Hunt', crates: 0.55, b: 1, c: 4, g: 1, spd: 1.30 },
+    { name: 'No Escape', crates: 0.6, b: 1, c: 4, g: 2, spd: 1.35 },
+    { name: 'Swarm', crates: 0.48, b: 2, c: 5, g: 1, spd: 1.40 },
+    { name: 'Gauntlet', crates: 0.50, b: 1, c: 5, g: 2, spd: 1.45 },
+    { name: 'Ultra Bolt End', crates: 0.35, b: 0, c: 3, g: 2, boss: true, bossBombs: true, spd: 1.50 }
   ];
 
   // Seeded RNG (mulberry32).
@@ -47,8 +59,12 @@
     return { id: id, kind: 'player', x: c[0], y: c[1], tx: c[0], ty: c[1], dir: null, face: 'd', speed: 3.2, speedUps: 0, bombs: 1, range: 2, kick: false, shield: 0, inv: 0, alive: true, live: 0,
       human: !!opts.human, cpu: !opts.human, color: opts.color, name: opts.name, passBomb: null, wins: 0, pts: 0, kos: 0, crates: 0, ups: 0, think: 0, cpuDir: null, anim: 0 };
   }
-  function makeEnemy(id, type, x, y, diff) {
-    var t = ETYPES[type]; return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: t.speed * DIFF[diff].espeed, ghost: !!t.ghost, hp: t.hp || 1, inv: 0, alive: true, spawnT: 7, anim: 0, brain: true };
+  function enemySpeed(type, diff, levelMul) {
+    var raw = ETYPES[type].speed * DIFF[diff].espeed * (levelMul || 1);
+    return Math.min(SPEED_CAP, raw);
+  }
+  function makeEnemy(id, type, x, y, diff, levelMul) {
+    var t = ETYPES[type]; return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: enemySpeed(type, diff, levelMul), ghost: !!t.ghost, hp: t.hp || 1, inv: 0, alive: true, spawnT: 7, bombCD: type === 'boss' ? 2.8 : 0, anim: 0, brain: true };
   }
   var COLORS = ['#3fa9ff', '#ff6b6b', '#5fd36a', '#ffc93c'], NAMES = ['Blue', 'Red', 'Green', 'Gold'];
 
@@ -70,8 +86,9 @@
     g.players.push(p); g.lives = c ? c.lives : DIFF[diff].lives; g.score = c ? c.score : 0;
     var spots = [];
     for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) if (g.map[y][x] === FLOOR && x + y >= 11 && !(x === portal[0] && y === portal[1])) spots.push([x, y]);
-    function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; unbox(g, s[0], s[1], 6); g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff)); }
-    if (L.boss) { var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null; g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff)); }
+    var levelMul = L.spd || 1; g.bossBombs = !!L.bossBombs;
+    function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; unbox(g, s[0], s[1], 6); g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff, levelMul)); }
+    if (L.boss) { var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null; g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff, levelMul)); }
     for (var i = 0; i < L.b; i++) place('blob'); for (i = 0; i < L.c; i++) place('chaser'); for (i = 0; i < L.g; i++) place('ghost');
     return g;
   }
@@ -154,7 +171,7 @@
     var idx = g.bombs.indexOf(b); if (idx < 0) return; g.bombs.splice(idx, 1);
     var tiles = blastTiles(g, b.x, b.y, b.range), broke = 0;
     tiles.forEach(function (t) {
-      var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.owner;
+      var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.fromBoss ? 'boss' : b.owner;
       if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); var ow = byId(g, b.owner); if (ow) { ow.pts += 10; ow.crates++; } if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
       var o = bombAt(g, x, y); if (o && o.timer > 0) o.timer = 0;
     });
@@ -164,9 +181,12 @@
   function byId(g, id) { for (var i = 0; i < g.players.length; i++) if (g.players[i].id === id) return g.players[i]; return null; }
   function hit(g, e) {
     if (!e.alive || e.inv > 0) return;
+    var t0 = tileAt(e), fo = g.flameOwner[t0[1]][t0[0]];
+    // Boss never dies to its own bombs (or any fromBoss flame). Helpers still can.
+    if (e.kind === 'enemy' && e.type === 'boss' && (fo === e.id || fo === 'boss')) return;
     if (e.kind === 'player' && e.shield > 0) { e.shield--; e.inv = 2; g.events.push({ t: 'shield', x: e.x, y: e.y }); return; }
     if (e.kind === 'enemy' && e.hp > 1) { e.hp--; e.inv = 1.3; g.events.push({ t: 'bosshit', x: e.x, y: e.y }); g.shake = 1; return; }
-    e.alive = false; e.deadT = 0; e.diedAt = g.t; var t0 = tileAt(e), kb = byId(g, g.flameOwner[t0[1]][t0[0]]); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) { kb.pts += 100; kb.kos++; } g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
+    e.alive = false; e.deadT = 0; e.diedAt = g.t; var kb = byId(g, fo); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) { kb.pts += 100; kb.kos++; } g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
     if (e.kind === 'enemy') g.score += ETYPES[e.type].pts;
   }
 
@@ -189,6 +209,79 @@
     while (q.length) { var c = q.shift(); if (c[0] === goal[0] && c[1] === goal[1]) return c[2]; if (c[3] >= maxD) continue;
       for (var i = 0; i < 4; i++) { var k = DKEYS[i], d = DIRS[k], nx = c[0] + d[0], ny = c[1] + d[1], key = nx + ',' + ny; if (seen[key] || !passable(g, e, nx, ny)) continue; seen[key] = 1; q.push([nx, ny, c[2] || k, c[3] + 1]); } }
     return null;
+  }
+
+  // Boss bomb params for L15+ bombing bosses (L17 Mid Bolt, L22 Ultra Bolt). Earlier bosses never bomb.
+  function bossBombParams(g) {
+    var hard = g.diff === 'hard', med = g.diff === 'medium', late = (g.level || 0) >= 21;
+    return {
+      max: late ? (hard ? 2 : med ? 2 : 1) : (hard ? 2 : 1),
+      cd: late ? (hard ? 2.6 : med ? 3.2 : 4.0) : (hard ? 3.5 : med ? 4.2 : 5.0),
+      range: late ? (hard ? 3 : 2) : 2,
+      fuse: BOMB_TIME
+    };
+  }
+  // True if the player can reach a tile outside the simulated blast before the fuse runs out.
+  function playerHasBombEscape(g, bx, by, range, fuse) {
+    var p = g.players[0]; if (!p || !p.alive) return true;
+    var dm = dangerMap(g, { x: bx, y: by, timer: fuse, range: range }, 0, p.id);
+    var st = 1 / p.speed, limit = Math.max(1, Math.floor((fuse - 0.55) / st));
+    var seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0 }]; seen[p.ty][p.tx] = true;
+    while (q.length) {
+      var c = q.shift();
+      if (dm[c.y][c.x] === Infinity) return true; // safe tile outside any blast
+      if (c.d >= limit) continue;
+      for (var i = 0; i < 4; i++) {
+        var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
+        if (seen[ny][nx] || !passable(g, p, nx, ny)) continue;
+        var arrive = (c.d + 1) * st;
+        if (dm[ny][nx] <= arrive + 0.05) continue; // would enter a tile as it explodes
+        seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1 });
+      }
+    }
+    return false;
+  }
+  function placeBossBomb(g, boss) {
+    if (!g.bossBombs || !boss || !boss.alive || boss.type !== 'boss') return false;
+    var P = bossBombParams(g), active = 0, i;
+    for (i = 0; i < g.bombs.length; i++) if (g.bombs[i].fromBoss) active++;
+    if (active >= P.max || boss.bombCD > 0) return false;
+    var p = g.players[0]; if (!p || !p.alive) return false;
+    // Candidates: tiles near the player, plus open tiles next to the boss along a line toward the player.
+    var cands = [], x, y, d, px = Math.round(p.x), py = Math.round(p.y);
+    function consider(x, y) {
+      if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return;
+      if (g.map[y][x] !== FLOOR || bombAt(g, x, y)) return;
+      if (x === boss.tx && y === boss.ty) return;
+      d = Math.abs(x - px) + Math.abs(y - py);
+      if (d < 1) return;
+      var hits = false, tiles = blastTiles(g, x, y, P.range);
+      for (var j = 0; j < tiles.length; j++) if (Math.abs(tiles[j][0] - px) + Math.abs(tiles[j][1] - py) <= 1) { hits = true; break; }
+      if (!hits) return;
+      if (!playerHasBombEscape(g, x, y, P.range, P.fuse)) return;
+      cands.push({ x: x, y: y, d: d, nearBoss: Math.abs(x - boss.tx) + Math.abs(y - boss.ty) });
+    }
+    for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+      d = Math.abs(x - px) + Math.abs(y - py);
+      if (d >= 1 && d <= P.range + 3) consider(x, y);
+    }
+    // Also try stepping from the boss toward the player up to range+1
+    DKEYS.forEach(function (k) {
+      var dir = DIRS[k];
+      for (var step = 1; step <= P.range + 1; step++) consider(boss.tx + dir[0] * step, boss.ty + dir[1] * step);
+    });
+    if (!cands.length) return false;
+    // Prefer closer threats the boss can still reach conceptually; avoid identical picks
+    var uniq = {}, list = [];
+    cands.forEach(function (c) { var key = c.x + "," + c.y; if (!uniq[key]) { uniq[key] = 1; list.push(c); } });
+    list.sort(function (a, b) { return (a.d - b.d) || (a.nearBoss - b.nearBoss); });
+    var pick = list[Math.min(list.length - 1, g.rng.int(Math.min(4, list.length)))];
+    var b = { id: g.nextId++, x: pick.x, y: pick.y, ox: 0, oy: 0, timer: P.fuse, range: P.range, owner: boss.id, fromBoss: true, slide: null, sp: 0 };
+    g.bombs.push(b); boss.bombCD = P.cd; boss.passBomb = b.id;
+    // Let the player walk off if standing on the tile (rare); boss can leave if adjacent placement fails and lands underfoot
+    if (Math.round(p.x) === pick.x && Math.round(p.y) === pick.y) p.passBomb = b.id;
+    g.events.push({ t: 'place', x: pick.x, y: pick.y, fromBoss: true });
+    return true;
   }
 
   // ---------- CPU / bot brain ----------
@@ -290,10 +383,14 @@
     g.enemies.forEach(function (e) {
       if (!e.alive) { e.deadT += dt; return; }
       if (e.inv > 0) e.inv -= dt;
-      var want = e.dir;
-      if (e.x === e.tx && e.y === e.ty) want = enemyThink(g, e);
+      var atTile = e.x === e.tx && e.y === e.ty, want = e.dir;
+      if (atTile) want = enemyThink(g, e);
+      if (e.type === 'boss') {
+        if (e.bombCD > 0) e.bombCD -= dt;
+        e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) { var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) { return g.map[c[1]][c[0]] === FLOOR && !bombAt(g, c[0], c[1]); })[0]; if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff, (LEVELS[g.level] && LEVELS[g.level].spd) || 1)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); } } }
+        if (g.bossBombs && atTile) placeBossBomb(g, e);
+      }
       moveEnt(g, e, want, dt);
-      if (e.type === 'boss') { e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) { var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) { return g.map[c[1]][c[0]] === FLOOR && !bombAt(g, c[0], c[1]); })[0]; if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); } } } }
     });
     // bombs
     g.bombs.slice().forEach(function (b) {
@@ -353,7 +450,7 @@
     return seen[g.portal.y][g.portal.x] && g.enemies.every(function (e) { return seen[e.ty][e.tx]; });
   }
 
-  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
-    RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
+  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, SPEED_CAP: SPEED_CAP, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
+    RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, placeBossBomb: placeBossBomb, playerHasBombEscape: playerHasBombEscape, bossBombParams: bossBombParams, enemySpeed: enemySpeed, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.BM = root.BM || {}; root.BM.Engine = api; }
 })(this);

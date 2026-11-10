@@ -73,3 +73,8 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 44. Steering help is now only a short tap buffer (controller layer; engine and CPU robots unchanged): a perpendicular tap released up to 150 ms before the robot reaches a tile where that way is open and free of blasts, bombs and critters still turns there. The robot only ever moves in a direction you are pressing or that fresh tap: no snap-back, no automatic sliding, no move from a standstill. (browser: QA v7 cases S3, S4, S4b, S5 and a random-press property test)
 45. The bomb button only reacts to touches inside its visible circle, so touches in the gap next to the D-pad do nothing. The gap is at least 12 px at 320 px wide. (browser)
 
+
+### Added in v9 (10 new levels + bombing bosses)
+46. Story mode has 22 levels. Levels 1-12 match v8. Levels 13-22 ramp enemy speed (per-level spd, Hard capped at 3.30) and chaser counts (2 up to 5). Bosses on levels 6, 12, 17 and 22. (unit + sim)
+47. Bosses on level 17 (Mid Bolt) and level 22 (Ultra Bolt End) drop their own bombs. Boss bombs use a purple/magenta glow and a diamond-with-X mark so they stay distinct from cyan player bombs for colorblind players. Same blast rules; boss is immune to its own bombs; placement requires a player escape path; cooldown and max bombs ramp by difficulty and are harder on L22. Levels 6 and 12 bosses never bomb. (unit + sim)
+48. Save format stays v2 and accepts story levels 0-21. Win screen says 22 levels / Ultra Bolt. Themes cycle every 3 levels. (unit + browser)

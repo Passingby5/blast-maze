@@ -36,7 +36,7 @@
     { name: 'ice', f: ['#d7f0fb', '#c9e7f6'], grout: '#9fcbe2', spot: 'rgba(255,255,255,0.55)', blade: '#b3dcef', wall: ['#e9f7ff', '#9fd2f0', '#6aa6cf', '#2d4f78'], edge: ['#bfe1f5', '#7fb4da', '#4f86b3', '#22406a'], bg: '#5c8fb8' },
     { name: 'volcano', f: ['#7b6a86', '#72627d'], grout: '#55465f', spot: 'rgba(255,170,90,0.10)', blade: '#ff8a3d', wall: ['#7d7489', '#5a5266', '#3d3747', '#1b1722'], edge: ['#6a6176', '#4a4355', '#322c3b', '#15111b'], bg: '#3a2f45' }
   ];
-  function themeFor(g) { var i = g.mode === 'story' ? Math.min(3, Math.floor((g.level || 0) / 3)) : ((g.seed || 0) >>> 0) % 4; return THEMES[i] || THEMES[0]; }
+  function themeFor(g) { var i = g.mode === 'story' ? (Math.floor((g.level || 0) / 3) % 4) : ((g.seed || 0) >>> 0) % 4; return THEMES[i] || THEMES[0]; }
   function buildStatic(g) {
     theme = themeFor(g); var th = theme, sd = (g.level || 0) * 31 + 7;
     var c = document.createElement('canvas'); c.width = Math.round(bw * dpr); c.height = Math.round(bh * dpr); var x2 = c.getContext('2d'); x2.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -158,18 +158,37 @@
     c.fillStyle = '#3a4466'; for (var i = -1; i <= 1; i += 2) { c.beginPath(); c.arc(cx + i * r * 0.72, cy, T * 0.03, 0, 7); c.fill(); }
     c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.ellipse(cx - r * 0.42, cy - r * 0.5, r * 0.2, r * 0.1, -0.7, 0, 7); c.fill();
   }); }
+  function bossBombSprite() { return sprite('orbBoss', 1, 1, 0.3, function (c) {
+    var cx = T / 2, cy = T / 2 + T * 0.04, r = T * 0.32;
+    c.fillStyle = OUT; c.beginPath(); c.arc(cx, cy, r + T * 0.04, 0, 7); c.fill();
+    var gr = c.createRadialGradient(cx - r * 0.25, cy - r * 0.3, r * 0.05, cx, cy, r); gr.addColorStop(0, '#ffe8ff'); gr.addColorStop(0.25, '#ff7ad9'); gr.addColorStop(0.65, '#c43bff'); gr.addColorStop(1, '#5a1488');
+    c.fillStyle = gr; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
+    // metal cage with diamond badge (shape cue for colorblind readers)
+    var mg = c.createLinearGradient(0, cy - T * 0.07, 0, cy + T * 0.07); mg.addColorStop(0, '#f5e6ff'); mg.addColorStop(1, '#8a6aad');
+    c.save(); c.beginPath(); c.arc(cx, cy, r, 0, 7); c.clip();
+    c.fillStyle = OUT; c.fillRect(cx - r, cy - T * 0.075, r * 2, T * 0.15); c.fillStyle = mg; c.fillRect(cx - r, cy - T * 0.055, r * 2, T * 0.11);
+    c.strokeStyle = OUT; c.lineWidth = T * 0.06; c.beginPath(); c.ellipse(cx, cy, r * 0.45, r, 0, 0, 7); c.stroke();
+    c.restore();
+    c.fillStyle = '#fff38a'; c.beginPath(); c.moveTo(cx, cy - r * 0.55); c.lineTo(cx + r * 0.38, cy); c.lineTo(cx, cy + r * 0.55); c.lineTo(cx - r * 0.38, cy); c.closePath(); c.fill();
+    c.strokeStyle = '#2a1038'; c.lineWidth = T * 0.035; c.stroke();
+    c.strokeStyle = '#2a1038'; c.lineWidth = T * 0.05; c.beginPath(); c.moveTo(cx - r * 0.12, cy - r * 0.12); c.lineTo(cx + r * 0.12, cy + r * 0.12); c.moveTo(cx + r * 0.12, cy - r * 0.12); c.lineTo(cx - r * 0.12, cy + r * 0.12); c.stroke();
+  }); }
   function drawBomb(c, b) {
-    var cx = (b.x + 0.5) * T, cy = (b.y + 0.5) * T, k = 1 - b.timer / E.BOMB_TIME, rate = 7 + k * 16, pl = Math.sin(time * rate), sx = 1 + pl * 0.06 * (0.5 + k), sy = 1 - pl * 0.05 * (0.5 + k), r = T * 0.32;
-    c.fillStyle = 'rgba(0,20,10,0.32)'; c.beginPath(); c.ellipse(cx + T * 0.04, cy + T * 0.36, T * 0.3 * sx, T * 0.1, 0, 0, 7); c.fill();
-    var s = bombSprite(); c.save(); c.translate(cx, cy + T * 0.37); c.scale(sx, sy); c.drawImage(s.c, -T / 2 - s.ox, -T * 0.87 - s.oy, s.w, s.h); c.restore();
+    var boss = !!b.fromBoss, cx = (b.x + 0.5) * T, cy = (b.y + 0.5) * T, k = 1 - b.timer / E.BOMB_TIME, rate = 7 + k * 16, pl = Math.sin(time * rate), sx = 1 + pl * 0.06 * (0.5 + k), sy = 1 - pl * 0.05 * (0.5 + k), r = T * 0.32;
+    c.fillStyle = boss ? 'rgba(40,0,50,0.38)' : 'rgba(0,20,10,0.32)'; c.beginPath(); c.ellipse(cx + T * 0.04, cy + T * 0.36, T * 0.3 * sx, T * 0.1, 0, 0, 7); c.fill();
+    var s = boss ? bossBombSprite() : bombSprite(); c.save(); c.translate(cx, cy + T * 0.37); c.scale(sx, sy); c.drawImage(s.c, -T / 2 - s.ox, -T * 0.87 - s.oy, s.w, s.h); c.restore();
     var bcy = cy + T * 0.37 - (T * 0.37 - T * 0.04) * sy;
     c.save(); c.globalCompositeOperation = 'lighter';
-    var hot = Math.min(1, k * 1.3), gs = glowSprite(hot > 0.6 ? '255,90,50' : hot > 0.3 ? '255,170,60' : '80,200,255'), gsc = 0.75 + 0.15 * pl;
+    var hot = Math.min(1, k * 1.3), glow = boss ? (hot > 0.55 ? '255,80,200' : hot > 0.25 ? '210,90,255' : '170,60,255') : (hot > 0.6 ? '255,90,50' : hot > 0.3 ? '255,170,60' : '80,200,255');
+    var gs = glowSprite(glow), gsc = 0.75 + 0.15 * pl;
     c.globalAlpha = 0.35 + 0.35 * hot; blit(c, gs, cx - T / 2 * gsc, bcy - T / 2 * gsc, gsc);
-    if (k > 0.35) { c.globalAlpha = (k - 0.35) * (0.6 + 0.4 * Math.max(0, pl)); c.fillStyle = 'rgb(255,' + Math.round(150 - k * 110) + ',40)'; c.beginPath(); c.ellipse(cx, bcy, r * sx * 0.9, r * sy * 0.9, 0, 0, 7); c.fill(); }
-    // orbiting spark
+    if (k > 0.35) { c.globalAlpha = (k - 0.35) * (0.6 + 0.4 * Math.max(0, pl)); c.fillStyle = boss ? 'rgb(255,' + Math.round(90 - k * 40) + ',220)' : 'rgb(255,' + Math.round(150 - k * 110) + ',40)'; c.beginPath(); c.ellipse(cx, bcy, r * sx * 0.9, r * sy * 0.9, 0, 0, 7); c.fill(); }
+    // orbiting spark (square for boss, round for player)
     c.globalAlpha = 1; var oa = time * (5 + k * 10), ox = cx + Math.cos(oa) * r * 1.15, oy = bcy + Math.sin(oa) * r * 0.45;
-    c.fillStyle = '#fffbe0'; c.beginPath(); c.arc(ox, oy, T * 0.04, 0, 7); c.fill(); c.restore();
+    c.fillStyle = boss ? '#ffe0ff' : '#fffbe0';
+    if (boss) { c.save(); c.translate(ox, oy); c.rotate(0.785); c.fillRect(-T * 0.045, -T * 0.045, T * 0.09, T * 0.09); c.restore(); }
+    else { c.beginPath(); c.arc(ox, oy, T * 0.04, 0, 7); c.fill(); }
+    c.restore();
   }
   // ---------- explosions ----------
   function drawFlames(c, g) {
@@ -368,7 +387,7 @@
     if (g.portal) drawPortal(c, g.portal);
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (g.items[y][x] && g.map[y][x] === E.FLOOR) drawItem(c, x * T, y * T, g.items[y][x]);
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (g.map[y][x] === E.CRATE) blit(c, cs, x * T, y * T);
-    g.bombs.forEach(function (b) { drawBomb(c, { x: b.x + (b.slide ? (EDIR[b.slide][0] * b.sp) : 0), y: b.y + (b.slide ? EDIR[b.slide][1] * b.sp : 0), timer: b.timer }); });
+    g.bombs.forEach(function (b) { drawBomb(c, { x: b.x + (b.slide ? (EDIR[b.slide][0] * b.sp) : 0), y: b.y + (b.slide ? EDIR[b.slide][1] * b.sp : 0), timer: b.timer, fromBoss: b.fromBoss }); });
     var ents = g.enemies.filter(function (e) { return e.alive; }).concat(g.players.filter(function (p) { return p.alive || p.deadT < 0.6; })).sort(function (a, b) { return a.y - b.y; });
     ents.forEach(function (e) { if (e.kind === 'player') drawRobot(c, e, e.alive ? 1 : Math.max(0, 1 - e.deadT / 0.6)); else drawEnemy(c, e); });
     drawFlames(c, g);

@@ -15,7 +15,7 @@
   function cleanStory(s) {
     try {
       if (!s || typeof s !== 'object' || Array.isArray(s)) return null; var c = s.carry;
-      if (typeof s.level !== 'number' || Math.floor(s.level) !== s.level || s.level < 0 || s.level > 11) return null;
+      if (typeof s.level !== 'number' || Math.floor(s.level) !== s.level || s.level < 0 || s.level > 21) return null;
       if (DIFFS.indexOf(s.difficulty) < 0) return null;
       if (!c || typeof c !== 'object' || typeof c.kick !== 'boolean') return null;
       return { level: s.level, difficulty: s.difficulty, attempt: typeof s.attempt === 'number' && isFinite(s.attempt) ? Math.max(0, Math.floor(s.attempt)) % 1e6 : 0,

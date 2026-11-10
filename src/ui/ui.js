@@ -140,7 +140,7 @@
     if (g.mode === 'story') {
       if (g.status === 'won') {
         if (g.score > data.best) data.best = g.score;
-        if (g.level + 1 >= E.LEVELS.length) { data.story = null; save(); overlay('You did it!', 'You beat all 12 levels and the Mega Bolt. Final score: ' + g.score + '. Great teamwork!', [['Play Again', 'story', 'big'], ['Home', 'home', 'back']]); }
+        if (g.level + 1 >= E.LEVELS.length) { data.story = null; save(); overlay('You did it!', 'You beat all ' + E.LEVELS.length + ' levels and the Ultra Bolt. Final score: ' + g.score + '. Great teamwork!', [['Play Again', 'story', 'big'], ['Home', 'home', 'back']]); }
         else { data.story = { level: g.level + 1, difficulty: g.diff, carry: E.carry(g) }; save(); overlay('Level Clear!', E.LEVELS[g.level].name + ' done. Score: ' + g.score, [['Next Level', 'next', 'big'], ['Home', 'home', 'back']]); }
       } else if (g.status === 'dead') { data.story.carry = Object.assign({}, data.story.carry, { lives: g.lives }); save(); overlay(g.timeUp ? "Time's up!" : 'Oops!', (g.timeUp ? 'The clock ran out. ' : '') + 'You have ' + g.lives + (g.lives === 1 ? ' life' : ' lives') + ' left. Try again!', [['Try Again', 'again', 'big'], ['Home', 'home', 'back']]); }
       else { data.story = { level: g.level, difficulty: g.diff, attempt: data.story ? data.story.attempt : 0, carry: Object.assign({}, data.story ? data.story.carry : E.carry(g), { lives: E.DIFF[g.diff].lives }) }; save(); overlay(g.timeUp ? "Time's up! Game Over" : 'Game Over', 'Nice try! You can start again from level ' + (g.level + 1) + ' with full lives.', [['Retry Level', 'retry', 'big'], ['Home', 'home', 'back']]); }

@@ -20,8 +20,14 @@ t('8 shield', () => { const g = blank(), p = g.players[0]; p.shield = 1; E.hit(g
 t('9 seeded rng repeatable', () => { const a = E.newBattle({ seed: 42, cpus: 3 }), b = E.newBattle({ seed: 42, cpus: 3 }); assert.deepStrictEqual(a.map, b.map); run(a, 20); run(b, 20); assert.deepStrictEqual(a.players.map(p => [p.x, p.y, p.alive]), b.players.map(p => [p.x, p.y, p.alive])); const c = E.newBattle({ seed: 43 }); assert.notDeepStrictEqual(a.map, c.map); });
 t('10 enemy types and boss', () => { assert.deepStrictEqual(Object.keys(E.ETYPES), ['blob', 'chaser', 'ghost', 'boss']); const g = E.newStory(5, { seed: 1 }), b = g.enemies.find(e => e.type === 'boss'); assert.strictEqual(b.hp, 6); E.hit(g, b); assert(b.alive && b.hp === 5); const gh = E.newStory(6, { seed: 1 }).enemies.find(e => e.type === 'ghost'); assert(gh.ghost); run(g, 10); assert(g.enemies.length > 1, 'boss calls helpers'); });
 t('11 difficulty changes things', () => { const sp = d => E.newStory(3, { seed: 1, difficulty: d }).enemies[0].speed; assert(sp('easy') < sp('medium') && sp('medium') < sp('hard')); assert(E.DIFF.easy.lives > E.DIFF.hard.lives); assert(E.DIFF.easy.cpuMiss > E.DIFF.hard.cpuMiss); });
-t('12 story 12 levels, bosses on 6 and 12, portal after clear', () => { assert.strictEqual(E.LEVELS.length, 12); assert(E.LEVELS[5].boss && E.LEVELS[11].boss); const g = blank(); g.portal = { x: 3, y: 1, open: false }; run(g, 0.1); assert(g.portal.open); run(g, 1, [{ dir: 'r' }]); assert.strictEqual(g.status, 'won'); });
-t('13 all levels solvable', () => { for (let s = 1; s <= 50; s++) for (let l = 0; l < 12; l++) assert(E.solvable(E.newStory(l, { seed: s })), l + ' ' + s); });
+t('12 story 22 levels, bosses on 6/12/17/22, portal after clear', () => {
+  assert.strictEqual(E.LEVELS.length, 22);
+  assert(E.LEVELS[5].boss && E.LEVELS[11].boss && E.LEVELS[16].boss && E.LEVELS[21].boss);
+  assert(E.LEVELS[16].bossBombs && E.LEVELS[21].bossBombs);
+  assert(!E.LEVELS[5].bossBombs && !E.LEVELS[11].bossBombs);
+  const g = blank(); g.portal = { x: 3, y: 1, open: false }; run(g, 0.1); assert(g.portal.open); run(g, 1, [{ dir: 'r' }]); assert.strictEqual(g.status, 'won');
+});
+t('13 all levels solvable', () => { for (let s = 1; s <= 50; s++) for (let l = 0; l < E.LEVELS.length; l++) assert(E.solvable(E.newStory(l, { seed: s })), l + ' ' + s); });
 t('14 battle: last standing wins, 2 humans', () => { const g = E.newBattle({ humans: 2, cpus: 2, seed: 2 }); assert.strictEqual(g.players.length, 4); assert(g.players[0].human && g.players[1].human && g.players[2].cpu); g.players[1].alive = g.players[2].alive = g.players[3].alive = false; run(g, 0.1); assert.strictEqual(g.status, 'roundover'); assert.strictEqual(g.winner, g.players[0].id); assert.strictEqual(g.players[0].wins, 1); });
 t('15 time limit ends round', () => { const g = blank('battle'); g.players.forEach(p => p.inv = 1e9); g.players[2].alive = true; g.timeLeft = 0.05; run(g, 0.2); assert.strictEqual(g.status, 'roundover'); });
 t('24 save versioning', () => { const mem = {}; const st = { getItem: k => mem[k] ?? null, setItem: (k, v) => mem[k] = String(v), removeItem: k => delete mem[k] };
@@ -30,7 +36,7 @@ t('24 save versioning', () => { const mem = {}; const st = { getItem: k => mem[k
 t('MAJ-3 sudden death shrinks the arena and ends the round', () => { const g = blank('battle'); [[7, 5], [7, 7], [5, 5]].forEach((c, i) => { const p = g.players[i]; p.x = p.tx = c[0]; p.y = p.ty = c[1]; p.human = true; p.cpu = false; }); const w0 = g.map.flat().filter(v => v === E.WALL).length; g.timeLeft = E.SHRINK_AT + 0.1; run(g, 70, [{}, {}, {}]); assert(g.shrinking); const walls = g.map.flat().filter(v => v === E.WALL).length; assert(walls > w0 + 20, 'walls dropped ' + (walls - w0)); assert.notStrictEqual(g.status, 'play'); });
 t('MAJ-3 time out with 2 alive goes to points', () => { const g = blank('battle'); g.players.forEach(p => p.inv = 1e9); g.players[0].pts = 50; g.players[0].x = g.players[0].tx = 7; g.players[0].y = g.players[0].ty = 5; g.timeLeft = 0.02; run(g, 0.1); assert.strictEqual(g.winner, g.players[0].id); assert(g.onPoints); });
 t('MAJ-4 boss defeat clears helpers and opens portal', () => { const g = E.newStory(5, { seed: 1 }); run(g, 13); const b = g.enemies.find(e => e.type === 'boss'); b.hp = 1; b.inv = 0; E.hit(g, b); run(g, 0.05); assert(g.enemies.every(e => !e.alive)); assert(g.portal.open); assert.strictEqual(E.STORY_TIME, 300); });
-t('MIN-7 enemies start with room to move', () => { for (let s = 1; s <= 30; s++) for (let l = 0; l < 12; l++) { const g = E.newStory(l, { seed: s }); g.enemies.forEach(e => { if (e.type !== 'ghost') assert(E.unbox(g, e.tx, e.ty, 6) >= 6, 'boxed ' + l + ' ' + s); }); } });
+t('MIN-7 enemies start with room to move', () => { for (let s = 1; s <= 30; s++) for (let l = 0; l < E.LEVELS.length; l++) { const g = E.newStory(l, { seed: s }); g.enemies.forEach(e => { if (e.type !== 'ghost') assert(E.unbox(g, e.tx, e.ty, 6) >= 6, 'boxed ' + l + ' ' + s); }); } });
 t('MIN-5 different attempt seeds give different crates', () => { assert.notDeepStrictEqual(E.newStory(2, { seed: 1 }).map, E.newStory(2, { seed: 2 }).map); assert.deepStrictEqual(E.newStory(2, { seed: 7 }).map, E.newStory(2, { seed: 7 }).map); });
 t('POL-2 time up is flagged', () => { const g = blank(); g.enemies = [{ kind: 'enemy', alive: true, type: 'blob', x: 13, y: 11, tx: 13, ty: 11, speed: 0, hp: 1, inv: 0 }]; g.timeLeft = 0.01; run(g, 0.1); assert(g.timeUp); assert.strictEqual(g.status, 'dead'); });
 t('POL-5 hard has fewer lives than medium', () => { assert(E.DIFF.hard.lives < E.DIFF.medium.lives && E.DIFF.medium.lives < E.DIFF.easy.lives); });
@@ -41,4 +47,72 @@ t('MAJ-1 strict save validation', () => { const good = { bombs: 2, range: 3, spe
   assert.strictEqual(C(null), null); assert.strictEqual(C([]), null); assert.strictEqual(C({ level: 2, difficulty: 'easy', carry: Object.assign({}, good, { lives: Infinity }) }), null); });
 t('POL-C bot blasts crates to reach a walled-in portal', () => { for (let s = 1; s <= 8; s++) { const g = E.newStory(0, { seed: s }); g.enemies = []; g.portal = { x: 13, y: 11, open: false }; g.map[11][13] = 0; [[12, 11], [13, 10], [11, 11], [13, 9]].forEach(([x, y]) => g.map[y][x] = E.CRATE);
   g.players[0].bot = true; let n = 0; while (g.status === 'play' && n++ < 60 * 300) { g.players[0].inv = 1; E.step(g, [], 1 / 60); } assert.strictEqual(g.status, 'won', 'seed ' + s); } });
+
+t('v9 L1-12 names unchanged', () => {
+  const names = ['Sunny Start','Crate Garden','Busy Blobs','Here They Come','Tight Corners','Big Bolt Boss','Spooky Floaters','Mixed Bag','Chase Lane','Ghost Town','Crowded Maze','Mega Bolt Finale'];
+  names.forEach((n, i) => assert.strictEqual(E.LEVELS[i].name, n));
+});
+t('v9 speed ramp and CAP', () => {
+  const sp = (lv, d) => E.newStory(lv, { seed: 1, difficulty: d }).enemies.filter(e => e.type === 'chaser')[0].speed;
+  assert(sp(12, 'hard') > sp(3, 'hard'));
+  assert(sp(20, 'hard') >= sp(12, 'hard'));
+  assert.strictEqual(sp(21, 'hard'), E.SPEED_CAP);
+  assert(sp(21, 'easy') < sp(21, 'medium') && sp(21, 'medium') <= sp(21, 'hard'));
+  assert(E.SPEED_CAP === 3.3);
+});
+t('v9 chaser counts ramp', () => {
+  const c = lv => E.LEVELS[lv].c;
+  assert.strictEqual(c(12), 2); assert.strictEqual(c(14), 3); assert.strictEqual(c(17), 4); assert.strictEqual(c(19), 5); assert.strictEqual(c(20), 5);
+});
+t('v9 early bosses never drop bombs', () => {
+  for (const lv of [5, 11]) {
+    const g = E.newStory(lv, { seed: 1, difficulty: 'hard' });
+    for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] === E.CRATE) g.map[y][x] = E.FLOOR;
+    const boss = g.enemies.find(e => e.type === 'boss'); boss.bombCD = 0; g.players[0].inv = 99;
+    g.players[0].x = g.players[0].tx = boss.tx - 3; g.players[0].y = g.players[0].ty = boss.ty;
+    assert.strictEqual(E.placeBossBomb(g, boss), false);
+    for (let i = 0; i < 300; i++) E.step(g, [], 1 / 60);
+    assert(g.bombs.every(b => !b.fromBoss));
+  }
+});
+t('v9 L17/L22 boss bombs distinct and fair', () => {
+  for (const lv of [16, 21]) {
+    const g = E.newStory(lv, { seed: 7, difficulty: 'hard' });
+    assert(g.bossBombs);
+    for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] === E.CRATE) g.map[y][x] = E.FLOOR;
+    const boss = g.enemies.find(e => e.type === 'boss'), p = g.players[0];
+    boss.bombCD = 0; p.inv = 99; p.x = p.tx = boss.tx - 4; p.y = p.ty = boss.ty;
+    assert(E.placeBossBomb(g, boss));
+    const bb = g.bombs.find(b => b.fromBoss);
+    assert(bb && bb.fromBoss === true && bb.timer === E.BOMB_TIME && bb.range >= 2);
+    assert(E.playerHasBombEscape(g, bb.x, bb.y, bb.range, bb.timer), 'escape required');
+    // player bomb alongside boss bomb is visually/logic distinct via fromBoss flag
+    p.x = p.tx = 1; p.y = p.ty = 1; assert(E.placeBomb(g, p));
+    assert(g.bombs.some(b => b.fromBoss) && g.bombs.some(b => !b.fromBoss));
+    // boss immune to own blast
+    const hp = boss.hp; g.bombs.length = 0;
+    g.bombs.push({ id: 999, x: boss.tx, y: boss.ty, timer: 0.01, range: 2, owner: boss.id, fromBoss: true, slide: null, sp: 0 });
+    run(g, 0.4); assert(boss.alive && boss.hp === hp);
+  }
+  const p17 = E.bossBombParams(E.newStory(16, { seed: 1, difficulty: 'easy' }));
+  const p22 = E.bossBombParams(E.newStory(21, { seed: 1, difficulty: 'hard' }));
+  assert(p22.max >= p17.max && p22.cd <= p17.cd);
+});
+t('v9 escape-path rejects trapping bombs', () => {
+  const g = E.newStory(16, { seed: 1, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) g.map[y][x] = (x % 2 === 0 && y % 2 === 0) ? E.WALL : E.CRATE;
+  for (let y = 1; y <= 11; y++) g.map[y][1] = E.FLOOR; // full open vertical corridor
+  const p = g.players[0]; p.x = p.tx = 1; p.y = p.ty = 5; p.speed = 3.2;
+  // Range 12 covers the whole corridor; no side doors => trapped
+  assert.strictEqual(E.playerHasBombEscape(g, 1, 1, 12, E.BOMB_TIME), false, 'no side exit from blast corridor');
+  g.map[5][2] = E.FLOOR; g.map[5][3] = E.FLOOR; g.map[5][4] = E.FLOOR; g.map[5][5] = E.FLOOR;
+  assert.strictEqual(E.playerHasBombEscape(g, 1, 1, 12, E.BOMB_TIME), true, 'side corridor is an escape');
+});
+t('v9 save accepts levels through 21', () => {
+  const good = { bombs: 2, range: 3, speedUps: 1, kick: true, shield: 1, lives: 2, score: 10 };
+  assert(S.cleanStory({ level: 21, difficulty: 'hard', carry: good }));
+  assert.strictEqual(S.cleanStory({ level: 22, difficulty: 'hard', carry: good }), null);
+  assert(S.cleanStory({ level: 12, difficulty: 'medium', carry: good }));
+});
+
 console.log('unit tests passed:', n);

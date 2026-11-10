@@ -209,4 +209,28 @@ t('v10 best score sanitized', () => {
   assert.strictEqual(S.read(st).best, 0);
 });
 
+
+t('v11 R10-1 chained corridor needs >=0.2s exit margin', () => {
+  const g = E.newStory(16, { seed: 1, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] !== E.WALL) g.map[y][x] = E.FLOOR;
+  g.map[4][9] = g.map[6][9] = E.CRATE;
+  const boss = g.enemies.find(e => e.type === 'boss'), p = g.players[0];
+  g.enemies = [boss];
+  Object.assign(p, { x: 9, y: 5, tx: 9, ty: 5, speed: 3.2, speedUps: 0, shield: 0, inv: 0, kick: false });
+  Object.assign(boss, { bombCD: 0 });
+  g.bombs = [{ id: 6, x: 5, y: 5, timer: 0.04, range: 3, owner: p.id, slide: null, sp: 0 }];
+  assert.strictEqual(E.playerHasBombEscape(g, 8, 5, 2, E.BOMB_TIME), false);
+  assert(E.escapeReactionMargin(g, 8, 5, 2, E.BOMB_TIME) < E.BOSS_ESCAPE_REACT);
+  E.placeBossBomb(g, boss);
+  assert(!g.bombs.some(b => b.fromBoss && b.x === 8 && b.y === 5), 'must not place in the tight corridor');
+  // Forced bomb still chain-floors, but 0.2s-delayed Right cannot clear the blast cell
+  g.bombs.push({ id: 7, x: 8, y: 5, timer: 2.4, range: 2, owner: boss.id, fromBoss: true, slide: null, sp: 0 });
+  const delay = E.BOSS_ESCAPE_REACT;
+  for (let n = 0; n < 180 && g.status === 'play'; n++) {
+    const dir = g.t + 1e-9 < delay ? null : 'r';
+    E.step(g, [{ dir }], 1 / 60);
+  }
+  assert(!p.alive, '0.2s-delayed Right still dies if bomb is forced — validator must refuse this placement');
+});
+
 console.log('unit tests passed:', n);

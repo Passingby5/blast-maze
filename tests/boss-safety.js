@@ -40,6 +40,8 @@ for (const lv of [16, 21]) for (const diff of ['easy', 'medium', 'hard']) for (l
     placed++;
     const bb = g.bombs.find(b => b.fromBoss);
     assert(bb && E.playerHasBombEscape(g, bb.x, bb.y, bb.range, bb.timer), 'placed bomb must still pass escape check');
+    const margin = E.escapeReactionMargin(g, bb.x, bb.y, bb.range, bb.timer);
+    assert(margin >= E.BOSS_ESCAPE_REACT - 1e-9, 'placement margin ' + margin + ' < ' + E.BOSS_ESCAPE_REACT + ' L' + (lv + 1) + ' ' + diff + ' seed ' + s);
     const r = bombOnlyFate(g);
     checked++;
     assert(!r.earlyAll, 'sub-reaction unavoidable death L' + (lv + 1) + ' ' + diff + ' seed ' + s);
@@ -75,6 +77,22 @@ for (const lv of [16, 21]) for (const diff of ['easy', 'medium', 'hard']) for (l
   const r = bombOnlyFate(g);
   assert(!r.earlyAll, 'chain fixture must not all-die under 0.12s');
   assert(!r.unavoidable, 'chain fixture must leave an escape after BOSS_CHAIN_MIN');
+}
+
+// R10-1: QA mobile-chain corridor must be rejected
+{
+  const g = E.newStory(16, { seed: 1, difficulty: 'medium' });
+  for (let y = 1; y < E.H - 1; y++) for (let x = 1; x < E.W - 1; x++) if (g.map[y][x] !== E.WALL) g.map[y][x] = E.FLOOR;
+  g.map[4][9] = g.map[6][9] = E.CRATE;
+  const boss = g.enemies.find(e => e.type === 'boss'), p = g.players[0];
+  g.enemies = [boss];
+  Object.assign(p, { x: 9, y: 5, tx: 9, ty: 5, speed: 3.2, shield: 0, inv: 0 });
+  boss.bombCD = 0;
+  g.bombs.push({ id: g.nextId++, x: 5, y: 5, timer: 0.04, range: 3, owner: p.id, slide: null, sp: 0 });
+  assert.strictEqual(E.playerHasBombEscape(g, 8, 5, 2, E.BOMB_TIME), false);
+  assert(E.escapeReactionMargin(g, 8, 5, 2, E.BOMB_TIME) < E.BOSS_ESCAPE_REACT);
+  E.placeBossBomb(g, boss);
+  assert(!g.bombs.some(b => b.fromBoss && b.x === 8 && b.y === 5));
 }
 
 console.log('ok boss-safety placed', placed, 'checked', checked, 'seeds', SEEDS);

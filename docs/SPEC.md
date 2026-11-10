@@ -85,3 +85,6 @@ Blast Maze is an original, family-friendly maze blasting game. Cartoon robots, p
 51. Boss helpers never spawn on or next to the player (or other occupants); summon defers when every adjacent cell is unsafe. (unit)
 52. Boss bombs are not materialized onto a tile another entity occupies or is committed to step onto. (unit)
 53. Best score is finite, nonnegative, and clamped. Sim carry clamps speedUps to 4. (unit + sim)
+
+### Added in v11 (QA R10 escape timing)
+54. Boss-bomb escape validates exit time from every threatened tile on the path (half-tile leave), with at least BOSS_ESCAPE_REACT (0.2 s) margin after chain-shortened deadlines. The QA mobile-chain corridor at L17 seed 1 is refused. (unit + boss-safety)

@@ -227,8 +227,9 @@
       fuse: BOMB_TIME
     };
   }
-  // True if the player can reach a tile outside the simulated blast before it hits, treating the
-  // proposed bomb as a real occupied tile, including chain timing, reaction time, and hunter contact.
+  // True if the player can reach a safe tile after BOSS_ESCAPE_REACT, treating the proposed bomb as
+  // solid. Every threatened tile on the path (including start) must be EXITED before its own blast
+  // time with at least BOSS_ESCAPE_REACT margin. Exit = cross the half-tile boundary (Math.round).
   function playerHasBombEscape(g, bx, by, range, fuse) {
     var p = g.players[0]; if (!p || !p.alive) return true;
     var fake = { id: -99001, x: bx, y: by, timer: fuse, range: range, owner: 'boss', fromBoss: true, slide: null, sp: 0 };
@@ -236,25 +237,67 @@
     g.bombs.push(fake); if (underfoot) p.passBomb = fake.id;
     try {
       var dm = dangerMap(g, null, 0, p.id), tm = threatMap(g, p);
+      var react = BOSS_ESCAPE_REACT, st = 1 / p.speed, half = 0.5 / p.speed;
       var frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
-      var leaveNeed = (frac > 0.05 ? frac / p.speed : 1 / p.speed) + BOSS_ESCAPE_REACT;
-      if (dm[p.ty][p.tx] < leaveNeed) return false; // current tile explodes before the player can leave
-      var st = 1 / p.speed, limit = Math.max(1, Math.floor((Math.min(fuse, 8) - BOSS_ESCAPE_REACT) / st));
+      // Time to first leave the current rounded cell after reacting
+      var leaveStart = react + (frac > 0.05 ? Math.max(0.02, Math.min(half, frac)) : half);
+      if (dm[p.ty][p.tx] < Infinity && leaveStart > dm[p.ty][p.tx] - react) return false;
+      if (dm[p.ty][p.tx] === Infinity && !tm[p.ty][p.tx]) return true;
+      var limit = Math.max(1, Math.floor((Math.min(fuse, 8) + 1) / st));
       var seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0 }]; seen[p.ty][p.tx] = true;
       while (q.length) {
         var c = q.shift();
-        if (dm[c.y][c.x] === Infinity && !tm[c.y][c.x]) return true;
         if (c.d >= limit) continue;
+        // Time at this tile's center (d=0: already here before moving)
+        var atCenter = c.d === 0 ? 0 : react + c.d * st;
         for (var i = 0; i < 4; i++) {
           var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
-          if (seen[ny][nx] || !passable(g, p, nx, ny)) continue;
-          var arrive = (c.d + 1) * st + BOSS_ESCAPE_REACT;
-          if (dm[ny][nx] <= arrive + 0.05) continue;
-          if (tm[ny][nx]) continue; // never path through hunter/boss contact tiles
+          if (seen[ny][nx] || !passable(g, p, nx, ny) || tm[ny][nx]) continue;
+          // Leave current cell across the half-tile boundary
+          var leaveC = (c.d === 0 ? leaveStart : atCenter + half);
+          if (dm[c.y][c.x] < Infinity && leaveC > dm[c.y][c.x] - react) continue;
+          // Crossing into a safe tile at leaveC is success
+          if (dm[ny][nx] === Infinity) return true;
+          // Threatened neighbor: must also be able to EXIT it later with the same margin
+          var arriveN = react + (c.d + 1) * st, leaveN = arriveN + half;
+          if (leaveN > dm[ny][nx] - react) continue;
           seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1 });
         }
       }
       return false;
+    } finally { g.bombs.pop(); p.passBomb = savedPass; }
+  }
+  // Minimum blast-exit slack (seconds) along the best escape path; < react means unsafe.
+  // Used by tests/fuzz. Returns Infinity if already safe / no player.
+  function escapeReactionMargin(g, bx, by, range, fuse) {
+    var p = g.players[0]; if (!p || !p.alive) return Infinity;
+    var fake = { id: -99002, x: bx, y: by, timer: fuse, range: range, owner: 'boss', fromBoss: true, slide: null, sp: 0 };
+    var underfoot = Math.round(p.x) === bx && Math.round(p.y) === by, savedPass = p.passBomb;
+    g.bombs.push(fake); if (underfoot) p.passBomb = fake.id;
+    try {
+      var dm = dangerMap(g, null, 0, p.id), tm = threatMap(g, p);
+      var react = BOSS_ESCAPE_REACT, st = 1 / p.speed, half = 0.5 / p.speed;
+      var frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
+      var leaveStart = react + (frac > 0.05 ? Math.max(0.02, Math.min(half, frac)) : half);
+      if (dm[p.ty][p.tx] === Infinity && !tm[p.ty][p.tx]) return Infinity;
+      var best = -Infinity, seen = grid(false), q = [{ x: p.tx, y: p.ty, d: 0, slack: Infinity }];
+      seen[p.ty][p.tx] = true;
+      while (q.length) {
+        var c = q.shift(), atCenter = c.d === 0 ? 0 : react + c.d * st;
+        for (var i = 0; i < 4; i++) {
+          var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
+          if (seen[ny][nx] || !passable(g, p, nx, ny) || tm[ny][nx]) continue;
+          var leaveC = (c.d === 0 ? leaveStart : atCenter + half);
+          var slack = c.slack;
+          if (dm[c.y][c.x] < Infinity) slack = Math.min(slack, dm[c.y][c.x] - leaveC);
+          if (dm[ny][nx] === Infinity) { if (slack > best) best = slack; continue; }
+          var arriveN = react + (c.d + 1) * st, leaveN = arriveN + half;
+          slack = Math.min(slack, dm[ny][nx] - leaveN);
+          if (slack < 0) continue;
+          seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1, slack: slack });
+        }
+      }
+      return best;
     } finally { g.bombs.pop(); p.passBomb = savedPass; }
   }
   function tileClaimed(g, x, y, ignore) {
@@ -491,6 +534,6 @@
   }
 
   var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, SPEED_CAP: SPEED_CAP, BOSS_CHAIN_MIN: BOSS_CHAIN_MIN, BOSS_ESCAPE_REACT: BOSS_ESCAPE_REACT, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
-    RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, placeBossBomb: placeBossBomb, playerHasBombEscape: playerHasBombEscape, bossBombParams: bossBombParams, enemySpeed: enemySpeed, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
+    RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, placeBossBomb: placeBossBomb, playerHasBombEscape: playerHasBombEscape, escapeReactionMargin: escapeReactionMargin, bossBombParams: bossBombParams, enemySpeed: enemySpeed, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.BM = root.BM || {}; root.BM.Engine = api; }
 })(this);

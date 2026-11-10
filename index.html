@@ -137,7 +137,7 @@ body.landscape #pad{--a:64px}
     <ul class="help">
       <li>Drop a bomb. It goes off in a plus shape and breaks crates.</li>
       <li>Bombs can set off other bombs. Stay out of the line!</li>
-      <li>Story: clear every critter, then step on the glowing portal.</li>
+      <li>Story: beat the boss (when there is one) and clear every critter, then step on the glowing portal.</li>
       <li>Phone: drag the left stick to move, tap the big button to drop a bomb.</li>
       <li>Keyboard: arrows or W A S D to move, Space to drop, P to pause.</li>
     </ul>
@@ -153,7 +153,7 @@ body.landscape #pad{--a:64px}
   <section id="overlay" class="screen dim hidden"><div class="card"><h2 id="ovTitle"></h2><div id="ovText"></div><div id="ovBtns" class="col"></div></div></section>
 </div>
 
-<script>var BM_BUILD = { label: "v8 - Oct 31 - 61987c7", id: "519fb432" };</script>
+<script>var BM_BUILD = { label: "v13 - Nov 9 - 71ce0e5", id: "ce7c0c81" };</script>
 <script data-src="engine.js">
 // Blast Maze game engine: pure logic, no DOM. Works in the browser (window.BM.Engine) and in Node (module.exports).
 (function (root) {
@@ -168,20 +168,36 @@ body.landscape #pad{--a:64px}
     hard: { espeed: 1.2, chase: 0.85, cpuMiss: 0.0, cpuThink: 0.05, lives: 2, see: 99, react: 0, cpuBombs: 8, hunt: 1, huntRange: 99, aim: 1, hesitate: 0 }
   };
   var ETYPES = { blob: { speed: 1.9, pts: 100 }, chaser: { speed: 2.3, pts: 200 }, ghost: { speed: 1.7, pts: 300, ghost: true }, boss: { speed: 1.5, pts: 2000, hp: 6 } };
-  // 12 story levels. b=blob, c=chaser, g=ghost, boss=true. crates = density.
+  // 22 story levels. b=blob, c=chaser, g=ghost, boss=true, spd=per-level speed mul, bossBombs=boss may place bombs.
+  // SPEED_CAP keeps Hard late chasers just above player base so the player can still outrun without Speed ups.
+  var SPEED_CAP = 3.30;
+  // Boss bombs chained by other blasts keep at least this much fuse (seconds) so the player can react.
+  var BOSS_CHAIN_MIN = 0.55, BOSS_ESCAPE_REACT = 0.2;
+  // L15-L22 (indices 14-21) each have a bombing boss. L6/L12 bosses do not bomb.
+  // bossHp / helpersMax / spawnCD tune the fight; enemy counts stay lean so the board stays clearable.
   var LEVELS = [
     { name: 'Sunny Start', crates: 0.45, b: 2, c: 0, g: 0 },
     { name: 'Crate Garden', crates: 0.55, b: 3, c: 0, g: 0 },
     { name: 'Busy Blobs', crates: 0.55, b: 4, c: 0, g: 0 },
     { name: 'Here They Come', crates: 0.5, b: 2, c: 2, g: 0 },
     { name: 'Tight Corners', crates: 0.65, b: 3, c: 2, g: 0 },
-    { name: 'Big Bolt Boss', crates: 0.3, b: 0, c: 0, g: 0, boss: true },
+    { name: 'Big Bolt Boss', crates: 0.3, b: 0, c: 0, g: 0, boss: true, bossHp: 6 },
     { name: 'Spooky Floaters', crates: 0.55, b: 2, c: 0, g: 2 },
     { name: 'Mixed Bag', crates: 0.6, b: 2, c: 2, g: 1 },
     { name: 'Chase Lane', crates: 0.5, b: 0, c: 4, g: 1 },
     { name: 'Ghost Town', crates: 0.6, b: 1, c: 1, g: 4 },
     { name: 'Crowded Maze', crates: 0.55, b: 3, c: 3, g: 2 },
-    { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true }
+    { name: 'Mega Bolt Finale', crates: 0.35, b: 0, c: 1, g: 1, boss: true, bossHp: 6 },
+    { name: 'Hot Pursuit', crates: 0.5, b: 2, c: 2, g: 0, spd: 1.08 },
+    { name: 'Faster Footing', crates: 0.55, b: 2, c: 2, g: 1, spd: 1.12 },
+    { name: 'Spark Bolt', crates: 0.4, b: 1, c: 1, g: 0, boss: true, bossBombs: true, bossHp: 4, helpersMax: 1, spawnCD: 14, spd: 1.16 },
+    { name: 'Fuse Knight', crates: 0.4, b: 1, c: 1, g: 1, boss: true, bossBombs: true, bossHp: 5, helpersMax: 1, spawnCD: 13, spd: 1.20 },
+    { name: 'Mid Bolt', crates: 0.35, b: 0, c: 1, g: 1, boss: true, bossBombs: true, bossHp: 6, helpersMax: 2, spawnCD: 12, spd: 1.25 },
+    { name: 'Crown Cracker', crates: 0.4, b: 0, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 6, helpersMax: 2, spawnCD: 11, spd: 1.30 },
+    { name: 'Blast Baron', crates: 0.38, b: 1, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 7, helpersMax: 2, spawnCD: 10, spd: 1.35 },
+    { name: 'Cage King', crates: 0.36, b: 0, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 7, helpersMax: 2, spawnCD: 9, spd: 1.40 },
+    { name: 'Thunder Tank', crates: 0.35, b: 0, c: 3, g: 1, boss: true, bossBombs: true, bossHp: 8, helpersMax: 2, spawnCD: 8, spd: 1.45 },
+    { name: 'Ultra Bolt End', crates: 0.32, b: 0, c: 2, g: 1, boss: true, bossBombs: true, bossHp: 8, helpersMax: 2, spawnCD: 7, spd: 1.50 }
   ];
 
   // Seeded RNG (mulberry32).
@@ -204,8 +220,13 @@ body.landscape #pad{--a:64px}
     return { id: id, kind: 'player', x: c[0], y: c[1], tx: c[0], ty: c[1], dir: null, face: 'd', speed: 3.2, speedUps: 0, bombs: 1, range: 2, kick: false, shield: 0, inv: 0, alive: true, live: 0,
       human: !!opts.human, cpu: !opts.human, color: opts.color, name: opts.name, passBomb: null, wins: 0, pts: 0, kos: 0, crates: 0, ups: 0, think: 0, cpuDir: null, anim: 0 };
   }
-  function makeEnemy(id, type, x, y, diff) {
-    var t = ETYPES[type]; return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: t.speed * DIFF[diff].espeed, ghost: !!t.ghost, hp: t.hp || 1, inv: 0, alive: true, spawnT: 7, anim: 0, brain: true };
+  function enemySpeed(type, diff, levelMul) {
+    var raw = ETYPES[type].speed * DIFF[diff].espeed * (levelMul || 1);
+    return Math.min(SPEED_CAP, raw);
+  }
+  function makeEnemy(id, type, x, y, diff, levelMul, extras) {
+    var t = ETYPES[type], hp = (extras && extras.hp) || t.hp || 1;
+    return { id: id, kind: 'enemy', type: type, x: x, y: y, tx: x, ty: y, dir: null, face: 'd', speed: enemySpeed(type, diff, levelMul), ghost: !!t.ghost, hp: hp, maxHp: hp, inv: 0, alive: true, spawnT: (extras && extras.spawnCD) || 7, bombCD: type === 'boss' ? 2.8 : 0, anim: 0, brain: true };
   }
   var COLORS = ['#3fa9ff', '#ff6b6b', '#5fd36a', '#ffc93c'], NAMES = ['Blue', 'Red', 'Green', 'Gold'];
 
@@ -227,8 +248,13 @@ body.landscape #pad{--a:64px}
     g.players.push(p); g.lives = c ? c.lives : DIFF[diff].lives; g.score = c ? c.score : 0;
     var spots = [];
     for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) if (g.map[y][x] === FLOOR && x + y >= 11 && !(x === portal[0] && y === portal[1])) spots.push([x, y]);
-    function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; unbox(g, s[0], s[1], 6); g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff)); }
-    if (L.boss) { var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null; g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff)); }
+    var levelMul = L.spd || 1; g.bossBombs = !!L.bossBombs;
+    function place(type) { var i = rng.int(spots.length), s = spots.splice(i, 1)[0]; unbox(g, s[0], s[1], 6); g.enemies.push(makeEnemy(g.nextId++, type, s[0], s[1], diff, levelMul)); }
+    if (L.boss) {
+      var bx = W - 4 + (W % 2 ? 1 : 0), by = H - 4 + 1; g.map[by][bx] = FLOOR; g.items[by][bx] = null;
+      g.enemies.push(makeEnemy(g.nextId++, 'boss', bx, by, diff, levelMul, { hp: L.bossHp || 6, spawnCD: L.spawnCD || 7 }));
+      g.helpersMax = L.helpersMax == null ? 2 : L.helpersMax;
+    }
     for (var i = 0; i < L.b; i++) place('blob'); for (i = 0; i < L.c; i++) place('chaser'); for (i = 0; i < L.g; i++) place('ghost');
     return g;
   }
@@ -311,9 +337,13 @@ body.landscape #pad{--a:64px}
     var idx = g.bombs.indexOf(b); if (idx < 0) return; g.bombs.splice(idx, 1);
     var tiles = blastTiles(g, b.x, b.y, b.range), broke = 0;
     tiles.forEach(function (t) {
-      var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.owner;
+      var x = t[0], y = t[1]; g.flames[y][x] = FLAME_TIME; g.flameOwner[y][x] = b.fromBoss ? 'boss' : b.owner;
       if (g.map[y][x] === CRATE) { g.map[y][x] = FLOOR; broke++; g.events.push({ t: 'crate', x: x, y: y }); var ow = byId(g, b.owner); if (ow) { ow.pts += 10; ow.crates++; } if (g.items[y][x]) g.events.push({ t: 'reveal', x: x, y: y }); g.score += 10; }
-      var o = bombAt(g, x, y); if (o && o.timer > 0) o.timer = 0;
+      var o = bombAt(g, x, y); if (o && o.timer > 0) {
+        // Boss bombs never chain to 0: keep a reaction window so the player can move.
+        if (o.fromBoss) o.timer = Math.min(o.timer, BOSS_CHAIN_MIN);
+        else o.timer = 0;
+      }
     });
     g.events.push({ t: 'boom', x: b.x, y: b.y, tiles: tiles, owner: b.owner }); g.shake = Math.min(1, g.shake + 0.45);
   }
@@ -321,9 +351,12 @@ body.landscape #pad{--a:64px}
   function byId(g, id) { for (var i = 0; i < g.players.length; i++) if (g.players[i].id === id) return g.players[i]; return null; }
   function hit(g, e) {
     if (!e.alive || e.inv > 0) return;
+    var t0 = tileAt(e), fo = g.flameOwner[t0[1]][t0[0]];
+    // Boss never dies to its own bombs (or any fromBoss flame). Helpers still can.
+    if (e.kind === 'enemy' && e.type === 'boss' && (fo === e.id || fo === 'boss')) return;
     if (e.kind === 'player' && e.shield > 0) { e.shield--; e.inv = 2; g.events.push({ t: 'shield', x: e.x, y: e.y }); return; }
     if (e.kind === 'enemy' && e.hp > 1) { e.hp--; e.inv = 1.3; g.events.push({ t: 'bosshit', x: e.x, y: e.y }); g.shake = 1; return; }
-    e.alive = false; e.deadT = 0; e.diedAt = g.t; var t0 = tileAt(e), kb = byId(g, g.flameOwner[t0[1]][t0[0]]); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) { kb.pts += 100; kb.kos++; } g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
+    e.alive = false; e.deadT = 0; e.diedAt = g.t; var kb = byId(g, fo); if (kb && kb !== e && g.flames[t0[1]][t0[0]] > 0) { kb.pts += 100; kb.kos++; } g.events.push({ t: e.kind === 'player' ? 'ko' : 'pop', x: e.x, y: e.y, id: e.id, type: e.type });
     if (e.kind === 'enemy') g.score += ETYPES[e.type].pts;
   }
 
@@ -348,15 +381,216 @@ body.landscape #pad{--a:64px}
     return null;
   }
 
+  // Boss bomb params for L15-L22 bombing bosses. Pressure ramps with display level; L6/L12 never bomb.
+  function bossBombParams(g) {
+    var hard = g.diff === 'hard', med = g.diff === 'medium';
+    var lv = g.level || 0, tier = Math.max(0, Math.min(7, lv - 14)); // L15..L22 → 0..7
+    var cdEasy = 5.5 - tier * 0.25, cdMed = 4.6 - tier * 0.25, cdHard = 4.0 - tier * 0.2;
+    var maxBombs = 1;
+    if (hard && tier >= 2) maxBombs = 2;
+    else if (med && tier >= 4) maxBombs = 2;
+    else if (tier >= 6) maxBombs = 2;
+    var range = (hard && tier >= 6) || (tier >= 7 && (hard || med)) ? 3 : 2;
+    return {
+      max: maxBombs,
+      cd: hard ? cdHard : med ? cdMed : cdEasy,
+      range: range,
+      fuse: BOMB_TIME
+    };
+  }
+  // Tiles the player occupies or overlaps: rounded position, committed target, and
+  // floor/ceil neighbors of a fractional mid-move coordinate.
+  function playerOverlapTiles(p) {
+    var tiles = [], seen = {};
+    function add(x, y) {
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      var k = x + ',' + y; if (seen[k]) return; seen[k] = 1; tiles.push([x, y]);
+    }
+    add(Math.round(p.x), Math.round(p.y));
+    add(p.tx, p.ty);
+    add(Math.floor(p.x + 1e-6), Math.round(p.y));
+    add(Math.ceil(p.x - 1e-6), Math.round(p.y));
+    add(Math.round(p.x), Math.floor(p.y + 1e-6));
+    add(Math.round(p.x), Math.ceil(p.y - 1e-6));
+    return tiles;
+  }
+  function snapMove(p) {
+    return { x: p.x, y: p.y, tx: p.tx, ty: p.ty, dir: p.dir, face: p.face, passBomb: p.passBomb, anim: p.anim, kick: p.kick };
+  }
+  // Simulate unchanged input for `react` seconds. Does not kick (would mutate bombs).
+  function afterReactionMove(g, p, react) {
+    var snap = snapMove(p), ev = g.events;
+    g.events = []; p.kick = false;
+    moveEnt(g, p, p.dir, react);
+    var after = snapMove(p);
+    g.events = ev; Object.assign(p, snap);
+    return after;
+  }
+  // Kicked bombs: current tile is already solid via passable(); also treat the next
+  // slide tile as solid because it can arrive before the player can react.
+  function escapePassable(g, p, x, y) {
+    if (!passable(g, p, x, y)) return false;
+    for (var i = 0; i < g.bombs.length; i++) {
+      var b = g.bombs[i]; if (!b.slide) continue;
+      var d = DIRS[b.slide];
+      if (b.x + d[0] === x && b.y + d[1] === y) return false;
+    }
+    return true;
+  }
+  // dangerMap already counts every player and boss bomb. Project sliding bombs'
+  // future blast origins too — if unsure, treat the path as dangerous.
+  function dangerMapEscape(g, self) {
+    var dm = dangerMap(g, null, 0, self), i, s, b, d, x, y, steps, t;
+    for (i = 0; i < g.bombs.length; i++) {
+      b = g.bombs[i]; if (!b.slide || !DIRS[b.slide]) continue;
+      d = DIRS[b.slide]; x = b.x; y = b.y; t = b.timer;
+      steps = Math.min(10, Math.ceil((t + 0.05) * KICK_SPEED));
+      for (s = 0; s < steps; s++) {
+        x += d[0]; y += d[1];
+        if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || g.map[y][x] !== FLOOR) break;
+        if (bombAt(g, x, y)) break;
+        blastTiles(g, x, y, b.range).forEach(function (cell) {
+          if (t < dm[cell[1]][cell[0]]) dm[cell[1]][cell[0]] = t;
+        });
+      }
+    }
+    return dm;
+  }
+  // Escape search after a BOSS_ESCAPE_REACT delay of unchanged input. Models mid-move
+  // fractional position, committed momentum, overlap tiles, and all existing bombs as
+  // solid (passBomb only if still on that bomb after the delay). If unsure, reject.
+  // Returns the best blast-exit slack (seconds); < react means no fair escape.
+  function bombEscapeSearch(g, bx, by, range, fuse) {
+    var p = g.players[0]; if (!p || !p.alive) return Infinity;
+    var fake = { id: -99001, x: bx, y: by, timer: fuse, range: range, owner: 'boss', fromBoss: true, slide: null, sp: 0 };
+    var saved = snapMove(p);
+    g.bombs.push(fake);
+    var overlaps = playerOverlapTiles(p), oi;
+    for (oi = 0; oi < overlaps.length; oi++) if (overlaps[oi][0] === bx && overlaps[oi][1] === by) { p.passBomb = fake.id; break; }
+    try {
+      var after = afterReactionMove(g, p, BOSS_ESCAPE_REACT);
+      Object.assign(p, after); p.kick = false;
+      var dm = dangerMapEscape(g, p.id), tm = threatMap(g, p);
+      var react = BOSS_ESCAPE_REACT, st = 1 / p.speed, half = 0.5 / p.speed;
+      var starts = [], frac = Math.abs(p.x - p.tx) + Math.abs(p.y - p.ty);
+      var preSlack = Infinity, ot = playerOverlapTiles(p);
+      for (oi = 0; oi < ot.length; oi++) {
+        var tx0 = ot[oi][0], ty0 = ot[oi][1];
+        if (tx0 === p.tx && ty0 === p.ty) continue;
+        var leaveT = react + half;
+        if (p.tx !== tx0) leaveT = react + Math.abs(p.x - (tx0 + (p.tx > tx0 ? 0.5 : -0.5))) * st;
+        else if (p.ty !== ty0) leaveT = react + Math.abs(p.y - (ty0 + (p.ty > ty0 ? 0.5 : -0.5))) * st;
+        if (dm[ty0][tx0] < Infinity) preSlack = Math.min(preSlack, dm[ty0][tx0] - leaveT);
+      }
+      if (preSlack >= react) starts.push({ x: p.tx, y: p.ty, d: 0, tCenter: react + frac * st, slack: preSlack });
+      if (frac > 1e-6 && p.dir && DIRS[p.dir]) {
+        var od = DIRS[p.dir], rx = p.tx - od[0], ry = p.ty - od[1];
+        if (escapePassable(g, p, rx, ry) && !tm[ry][rx]) {
+          var tRev = react + (Math.abs(p.x - rx) + Math.abs(p.y - ry)) * st;
+          starts.push({ x: rx, y: ry, d: 0, tCenter: tRev, slack: Infinity });
+        }
+      }
+      if (!starts.length) return -Infinity;
+      var safeAt = true;
+      for (oi = 0; oi < starts.length; oi++) {
+        var s0 = starts[oi];
+        if (!(dm[s0.y][s0.x] === Infinity && !tm[s0.y][s0.x] && s0.slack >= react && frac < 1e-6)) safeAt = false;
+      }
+      if (safeAt && starts.length) return Infinity;
+      var limit = Math.max(1, Math.floor((Math.min(fuse, 8) + 1) / st));
+      var best = -Infinity, seen = grid(false), q = starts.slice(), qi;
+      for (qi = 0; qi < starts.length; qi++) seen[starts[qi].y][starts[qi].x] = true;
+      while (q.length) {
+        var c = q.shift();
+        if (c.d >= limit) continue;
+        var atCenter = c.tCenter;
+        for (var i = 0; i < 4; i++) {
+          var k = DKEYS[i], d = DIRS[k], nx = c.x + d[0], ny = c.y + d[1];
+          if (seen[ny][nx] || !escapePassable(g, p, nx, ny) || tm[ny][nx]) continue;
+          var leaveC = atCenter + half, slack = c.slack;
+          if (dm[c.y][c.x] < Infinity) slack = Math.min(slack, dm[c.y][c.x] - leaveC);
+          if (dm[ny][nx] === Infinity) { if (slack > best) best = slack; continue; }
+          var arriveN = atCenter + st, leaveN = arriveN + half;
+          slack = Math.min(slack, dm[ny][nx] - leaveN);
+          if (slack < react) continue;
+          seen[ny][nx] = true; q.push({ x: nx, y: ny, d: c.d + 1, tCenter: arriveN, slack: slack });
+        }
+      }
+      return best;
+    } finally {
+      g.bombs.pop();
+      Object.assign(p, saved);
+    }
+  }
+  function playerHasBombEscape(g, bx, by, range, fuse) {
+    return bombEscapeSearch(g, bx, by, range, fuse) >= BOSS_ESCAPE_REACT - 1e-9;
+  }
+  // Minimum blast-exit slack (seconds) along the best escape path; < react means unsafe.
+  // Used by tests/fuzz. Returns Infinity if already safe / no player.
+  function escapeReactionMargin(g, bx, by, range, fuse) {
+    return bombEscapeSearch(g, bx, by, range, fuse);
+  }
+  function tileClaimed(g, x, y, ignore) {
+    var list = g.players.concat(g.enemies), i, o;
+    for (i = 0; i < list.length; i++) {
+      o = list[i]; if (!o.alive || o === ignore) continue;
+      if ((Math.round(o.x) === x && Math.round(o.y) === y) || (o.tx === x && o.ty === y)) return true;
+    }
+    return false;
+  }
+  function placeBossBomb(g, boss) {
+    if (!g.bossBombs || !boss || !boss.alive || boss.type !== 'boss') return false;
+    var P = bossBombParams(g), active = 0, i;
+    for (i = 0; i < g.bombs.length; i++) if (g.bombs[i].fromBoss) active++;
+    if (active >= P.max || boss.bombCD > 0) return false;
+    var p = g.players[0]; if (!p || !p.alive) return false;
+    var cands = [], x, y, d, px = Math.round(p.x), py = Math.round(p.y);
+    function consider(x, y) {
+      if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return;
+      if (g.map[y][x] !== FLOOR || bombAt(g, x, y)) return;
+      if (x === boss.tx && y === boss.ty) return;
+      if (tileClaimed(g, x, y, boss)) return; // never materialize onto a body or committed step
+      d = Math.abs(x - px) + Math.abs(y - py);
+      if (d < 1) return;
+      var hits = false, tiles = blastTiles(g, x, y, P.range);
+      for (var j = 0; j < tiles.length; j++) if (Math.abs(tiles[j][0] - px) + Math.abs(tiles[j][1] - py) <= 1) { hits = true; break; }
+      if (!hits) return;
+      if (!playerHasBombEscape(g, x, y, P.range, P.fuse)) return;
+      cands.push({ x: x, y: y, d: d, nearBoss: Math.abs(x - boss.tx) + Math.abs(y - boss.ty) });
+    }
+    for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+      d = Math.abs(x - px) + Math.abs(y - py);
+      if (d >= 1 && d <= P.range + 3) consider(x, y);
+    }
+    DKEYS.forEach(function (k) {
+      var dir = DIRS[k];
+      for (var step = 1; step <= P.range + 1; step++) consider(boss.tx + dir[0] * step, boss.ty + dir[1] * step);
+    });
+    if (!cands.length) return false; // if unsure / no safe placement, do not place
+    var uniq = {}, list = [];
+    cands.forEach(function (c) { var key = c.x + ',' + c.y; if (!uniq[key]) { uniq[key] = 1; list.push(c); } });
+    list.sort(function (a, b) { return (a.d - b.d) || (a.nearBoss - b.nearBoss); });
+    var pick = list[Math.min(list.length - 1, g.rng.int(Math.min(4, list.length)))];
+    // Final re-check right before commit (state may include hunters)
+    if (!playerHasBombEscape(g, pick.x, pick.y, P.range, P.fuse) || tileClaimed(g, pick.x, pick.y, boss)) return false;
+    var b = { id: g.nextId++, x: pick.x, y: pick.y, ox: 0, oy: 0, timer: P.fuse, range: P.range, owner: boss.id, fromBoss: true, slide: null, sp: 0 };
+    g.bombs.push(b); boss.bombCD = P.cd; boss.passBomb = b.id;
+    if (Math.round(p.x) === pick.x && Math.round(p.y) === pick.y) p.passBomb = b.id;
+    g.events.push({ t: 'place', x: pick.x, y: pick.y, fromBoss: true });
+    return true;
+  }
+
   // ---------- CPU / bot brain ----------
   function dangerMap(g, extra, see, self) {
-    var dm = grid(Infinity), bombs = g.bombs.filter(function (b) { return !see || b.timer <= see || b.owner === self; }).map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range }; });
-    if (extra) bombs.push(extra);
+    var dm = grid(Infinity), bombs = g.bombs.filter(function (b) { return !see || b.timer <= see || b.owner === self; }).map(function (b) { return { x: b.x, y: b.y, timer: b.timer, range: b.range, fromBoss: !!b.fromBoss }; });
+    if (extra) bombs.push({ x: extra.x, y: extra.y, timer: extra.timer, range: extra.range, fromBoss: !!extra.fromBoss });
     for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) if (g.flames[y][x] > 0) dm[y][x] = 0;
     if (g.mode === 'battle' && g.timeLeft <= SHRINK_AT + 3) for (var si = g.shrinkI; si < Math.min(g.shrink.length - 1, g.shrinkI + 14); si++) { var sc = g.shrink[si]; dm[sc[1]][sc[0]] = Math.min(dm[sc[1]][sc[0]], 0.8); }
     bombs.sort(function (a, b) { return a.timer - b.timer; });
-    for (var pass = 0; pass < 2; pass++) bombs.forEach(function (b) {
-      var t = Math.min(b.timer, dm[b.y][b.x]); b.timer = t;
+    for (var pass = 0; pass < 3; pass++) bombs.forEach(function (b) {
+      var hit = dm[b.y][b.x], t = b.timer;
+      if (hit < t) t = b.fromBoss ? Math.min(t, hit + BOSS_CHAIN_MIN) : hit;
+      b.timer = t;
       blastTiles(g, b.x, b.y, b.range).forEach(function (s) { if (t < dm[s[1]][s[0]]) dm[s[1]][s[0]] = t; });
     });
     return dm;
@@ -447,10 +681,36 @@ body.landscape #pad{--a:64px}
     g.enemies.forEach(function (e) {
       if (!e.alive) { e.deadT += dt; return; }
       if (e.inv > 0) e.inv -= dt;
-      var want = e.dir;
-      if (e.x === e.tx && e.y === e.ty) want = enemyThink(g, e);
+      var atTile = e.x === e.tx && e.y === e.ty, want = e.dir;
+      if (atTile) want = enemyThink(g, e);
+      if (e.type === 'boss') {
+        if (e.bombCD > 0) e.bombCD -= dt;
+        e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length, helpMax = g.helpersMax == null ? 2 : g.helpersMax; if (e.spawnT <= 0) { e.spawnT = (LEVELS[g.level] && LEVELS[g.level].spawnCD) || 12; if (helpers < helpMax) {
+          var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) {
+            if (c[0] < 1 || c[1] < 1 || c[0] >= W - 1 || c[1] >= H - 1) return false;
+            if (g.map[c[1]][c[0]] !== FLOOR || bombAt(g, c[0], c[1])) return false;
+            if (tileClaimed(g, c[0], c[1], e)) return false;
+            // Never spawn on or next to the player (current, committed, or after 0.2s of motion)
+            for (var pi = 0; pi < g.players.length; pi++) {
+              var pl = g.players[pi]; if (!pl.alive) continue;
+              if (Math.abs(pl.x - c[0]) + Math.abs(pl.y - c[1]) < 1.25) return false;
+              if (Math.abs(pl.tx - c[0]) + Math.abs(pl.ty - c[1]) <= 1) return false;
+              var predX = pl.x, predY = pl.y;
+              if (pl.dir && DIRS[pl.dir]) {
+                predX = pl.x + DIRS[pl.dir][0] * pl.speed * BOSS_ESCAPE_REACT;
+                predY = pl.y + DIRS[pl.dir][1] * pl.speed * BOSS_ESCAPE_REACT;
+              }
+              if (Math.abs(predX - c[0]) + Math.abs(predY - c[1]) < 1.25) return false;
+              if (Math.abs(Math.round(predX) - c[0]) + Math.abs(Math.round(predY) - c[1]) <= 1) return false;
+            }
+            return true;
+          })[0];
+          if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff, (LEVELS[g.level] && LEVELS[g.level].spd) || 1)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); }
+          else e.spawnT = 2.5; // defer when every adjacent cell is unsafe
+        } }
+        if (g.bossBombs && atTile) placeBossBomb(g, e);
+      }
       moveEnt(g, e, want, dt);
-      if (e.type === 'boss') { e.spawnT -= dt; var helpers = g.enemies.filter(function (o) { return o.alive && o.type !== 'boss'; }).length; if (e.spawnT <= 0) { e.spawnT = 12; if (helpers < 2) { var spot = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(function (d) { return [e.tx + d[0], e.ty + d[1]]; }).filter(function (c) { return g.map[c[1]][c[0]] === FLOOR && !bombAt(g, c[0], c[1]); })[0]; if (spot) { g.enemies.push(makeEnemy(g.nextId++, 'blob', spot[0], spot[1], g.diff)); g.events.push({ t: 'summon', x: spot[0], y: spot[1] }); } } } }
     });
     // bombs
     g.bombs.slice().forEach(function (b) {
@@ -510,8 +770,8 @@ body.landscape #pad{--a:64px}
     return seen[g.portal.y][g.portal.x] && g.enemies.every(function (e) { return seen[e.ty][e.tx]; });
   }
 
-  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
-    RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
+  var api = { W: W, H: H, FLOOR: FLOOR, WALL: WALL, CRATE: CRATE, BOMB_TIME: BOMB_TIME, FLAME_TIME: FLAME_TIME, STORY_TIME: STORY_TIME, SHRINK_AT: SHRINK_AT, SPEED_CAP: SPEED_CAP, BOSS_CHAIN_MIN: BOSS_CHAIN_MIN, BOSS_ESCAPE_REACT: BOSS_ESCAPE_REACT, unbox: unbox, BATTLE_TIME: BATTLE_TIME, LEVELS: LEVELS, POWERS: POWERS, DIFF: DIFF, ETYPES: ETYPES, COLORS: COLORS,
+    RNG: RNG, newStory: newStory, newBattle: newBattle, step: step, placeBomb: placeBomb, placeBossBomb: placeBossBomb, playerHasBombEscape: playerHasBombEscape, escapeReactionMargin: escapeReactionMargin, bossBombParams: bossBombParams, enemySpeed: enemySpeed, blastTiles: blastTiles, passable: passable, bombAt: bombAt, applyPower: applyPower, carry: carry, solvable: solvable, cpuInput: cpuInput, hit: hit };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.BM = root.BM || {}; root.BM.Engine = api; }
 })(this);
 </script>
@@ -523,7 +783,7 @@ body.landscape #pad{--a:64px}
   function read(st) {
     var d = fresh(); try { var raw = st.getItem(KEY); if (!raw) return d; var o = JSON.parse(raw); if (!o || o.v !== VERSION) return d;
       if (o.settings) { d.settings.muted = !!o.settings.muted; d.settings.calm = o.settings.calm === true; if (['easy', 'medium', 'hard'].indexOf(o.settings.difficulty) >= 0) d.settings.difficulty = o.settings.difficulty; }
-      d.best = +o.best || 0;
+      var best = +o.best; d.best = (typeof best === 'number' && isFinite(best) && best >= 0) ? Math.min(9999999, Math.floor(best)) : 0;
       d.story = cleanStory(o.story);
     } catch (e) { } return d;
   }
@@ -533,7 +793,7 @@ body.landscape #pad{--a:64px}
   function cleanStory(s) {
     try {
       if (!s || typeof s !== 'object' || Array.isArray(s)) return null; var c = s.carry;
-      if (typeof s.level !== 'number' || Math.floor(s.level) !== s.level || s.level < 0 || s.level > 11) return null;
+      if (typeof s.level !== 'number' || Math.floor(s.level) !== s.level || s.level < 0 || s.level > 21) return null;
       if (DIFFS.indexOf(s.difficulty) < 0) return null;
       if (!c || typeof c !== 'object' || typeof c.kick !== 'boolean') return null;
       return { level: s.level, difficulty: s.difficulty, attempt: typeof s.attempt === 'number' && isFinite(s.attempt) ? Math.max(0, Math.floor(s.attempt)) % 1e6 : 0,
@@ -654,7 +914,7 @@ body.landscape #pad{--a:64px}
     { name: 'ice', f: ['#d7f0fb', '#c9e7f6'], grout: '#9fcbe2', spot: 'rgba(255,255,255,0.55)', blade: '#b3dcef', wall: ['#e9f7ff', '#9fd2f0', '#6aa6cf', '#2d4f78'], edge: ['#bfe1f5', '#7fb4da', '#4f86b3', '#22406a'], bg: '#5c8fb8' },
     { name: 'volcano', f: ['#7b6a86', '#72627d'], grout: '#55465f', spot: 'rgba(255,170,90,0.10)', blade: '#ff8a3d', wall: ['#7d7489', '#5a5266', '#3d3747', '#1b1722'], edge: ['#6a6176', '#4a4355', '#322c3b', '#15111b'], bg: '#3a2f45' }
   ];
-  function themeFor(g) { var i = g.mode === 'story' ? Math.min(3, Math.floor((g.level || 0) / 3)) : ((g.seed || 0) >>> 0) % 4; return THEMES[i] || THEMES[0]; }
+  function themeFor(g) { var i = g.mode === 'story' ? (Math.floor((g.level || 0) / 3) % 4) : ((g.seed || 0) >>> 0) % 4; return THEMES[i] || THEMES[0]; }
   function buildStatic(g) {
     theme = themeFor(g); var th = theme, sd = (g.level || 0) * 31 + 7;
     var c = document.createElement('canvas'); c.width = Math.round(bw * dpr); c.height = Math.round(bh * dpr); var x2 = c.getContext('2d'); x2.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -776,18 +1036,37 @@ body.landscape #pad{--a:64px}
     c.fillStyle = '#3a4466'; for (var i = -1; i <= 1; i += 2) { c.beginPath(); c.arc(cx + i * r * 0.72, cy, T * 0.03, 0, 7); c.fill(); }
     c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.ellipse(cx - r * 0.42, cy - r * 0.5, r * 0.2, r * 0.1, -0.7, 0, 7); c.fill();
   }); }
+  function bossBombSprite() { return sprite('orbBoss', 1, 1, 0.3, function (c) {
+    var cx = T / 2, cy = T / 2 + T * 0.04, r = T * 0.32;
+    c.fillStyle = OUT; c.beginPath(); c.arc(cx, cy, r + T * 0.04, 0, 7); c.fill();
+    var gr = c.createRadialGradient(cx - r * 0.25, cy - r * 0.3, r * 0.05, cx, cy, r); gr.addColorStop(0, '#ffe8ff'); gr.addColorStop(0.25, '#ff7ad9'); gr.addColorStop(0.65, '#c43bff'); gr.addColorStop(1, '#5a1488');
+    c.fillStyle = gr; c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fill();
+    // metal cage with diamond badge (shape cue for colorblind readers)
+    var mg = c.createLinearGradient(0, cy - T * 0.07, 0, cy + T * 0.07); mg.addColorStop(0, '#f5e6ff'); mg.addColorStop(1, '#8a6aad');
+    c.save(); c.beginPath(); c.arc(cx, cy, r, 0, 7); c.clip();
+    c.fillStyle = OUT; c.fillRect(cx - r, cy - T * 0.075, r * 2, T * 0.15); c.fillStyle = mg; c.fillRect(cx - r, cy - T * 0.055, r * 2, T * 0.11);
+    c.strokeStyle = OUT; c.lineWidth = T * 0.06; c.beginPath(); c.ellipse(cx, cy, r * 0.45, r, 0, 0, 7); c.stroke();
+    c.restore();
+    c.fillStyle = '#fff38a'; c.beginPath(); c.moveTo(cx, cy - r * 0.55); c.lineTo(cx + r * 0.38, cy); c.lineTo(cx, cy + r * 0.55); c.lineTo(cx - r * 0.38, cy); c.closePath(); c.fill();
+    c.strokeStyle = '#2a1038'; c.lineWidth = T * 0.035; c.stroke();
+    c.strokeStyle = '#2a1038'; c.lineWidth = T * 0.05; c.beginPath(); c.moveTo(cx - r * 0.12, cy - r * 0.12); c.lineTo(cx + r * 0.12, cy + r * 0.12); c.moveTo(cx + r * 0.12, cy - r * 0.12); c.lineTo(cx - r * 0.12, cy + r * 0.12); c.stroke();
+  }); }
   function drawBomb(c, b) {
-    var cx = (b.x + 0.5) * T, cy = (b.y + 0.5) * T, k = 1 - b.timer / E.BOMB_TIME, rate = 7 + k * 16, pl = Math.sin(time * rate), sx = 1 + pl * 0.06 * (0.5 + k), sy = 1 - pl * 0.05 * (0.5 + k), r = T * 0.32;
-    c.fillStyle = 'rgba(0,20,10,0.32)'; c.beginPath(); c.ellipse(cx + T * 0.04, cy + T * 0.36, T * 0.3 * sx, T * 0.1, 0, 0, 7); c.fill();
-    var s = bombSprite(); c.save(); c.translate(cx, cy + T * 0.37); c.scale(sx, sy); c.drawImage(s.c, -T / 2 - s.ox, -T * 0.87 - s.oy, s.w, s.h); c.restore();
+    var boss = !!b.fromBoss, cx = (b.x + 0.5) * T, cy = (b.y + 0.5) * T, k = 1 - b.timer / E.BOMB_TIME, rate = 7 + k * 16, pl = Math.sin(time * rate), sx = 1 + pl * 0.06 * (0.5 + k), sy = 1 - pl * 0.05 * (0.5 + k), r = T * 0.32;
+    c.fillStyle = boss ? 'rgba(40,0,50,0.38)' : 'rgba(0,20,10,0.32)'; c.beginPath(); c.ellipse(cx + T * 0.04, cy + T * 0.36, T * 0.3 * sx, T * 0.1, 0, 0, 7); c.fill();
+    var s = boss ? bossBombSprite() : bombSprite(); c.save(); c.translate(cx, cy + T * 0.37); c.scale(sx, sy); c.drawImage(s.c, -T / 2 - s.ox, -T * 0.87 - s.oy, s.w, s.h); c.restore();
     var bcy = cy + T * 0.37 - (T * 0.37 - T * 0.04) * sy;
     c.save(); c.globalCompositeOperation = 'lighter';
-    var hot = Math.min(1, k * 1.3), gs = glowSprite(hot > 0.6 ? '255,90,50' : hot > 0.3 ? '255,170,60' : '80,200,255'), gsc = 0.75 + 0.15 * pl;
+    var hot = Math.min(1, k * 1.3), glow = boss ? (hot > 0.55 ? '255,80,200' : hot > 0.25 ? '210,90,255' : '170,60,255') : (hot > 0.6 ? '255,90,50' : hot > 0.3 ? '255,170,60' : '80,200,255');
+    var gs = glowSprite(glow), gsc = 0.75 + 0.15 * pl;
     c.globalAlpha = 0.35 + 0.35 * hot; blit(c, gs, cx - T / 2 * gsc, bcy - T / 2 * gsc, gsc);
-    if (k > 0.35) { c.globalAlpha = (k - 0.35) * (0.6 + 0.4 * Math.max(0, pl)); c.fillStyle = 'rgb(255,' + Math.round(150 - k * 110) + ',40)'; c.beginPath(); c.ellipse(cx, bcy, r * sx * 0.9, r * sy * 0.9, 0, 0, 7); c.fill(); }
-    // orbiting spark
+    if (k > 0.35) { c.globalAlpha = (k - 0.35) * (0.6 + 0.4 * Math.max(0, pl)); c.fillStyle = boss ? 'rgb(255,' + Math.round(90 - k * 40) + ',220)' : 'rgb(255,' + Math.round(150 - k * 110) + ',40)'; c.beginPath(); c.ellipse(cx, bcy, r * sx * 0.9, r * sy * 0.9, 0, 0, 7); c.fill(); }
+    // orbiting spark (square for boss, round for player)
     c.globalAlpha = 1; var oa = time * (5 + k * 10), ox = cx + Math.cos(oa) * r * 1.15, oy = bcy + Math.sin(oa) * r * 0.45;
-    c.fillStyle = '#fffbe0'; c.beginPath(); c.arc(ox, oy, T * 0.04, 0, 7); c.fill(); c.restore();
+    c.fillStyle = boss ? '#ffe0ff' : '#fffbe0';
+    if (boss) { c.save(); c.translate(ox, oy); c.rotate(0.785); c.fillRect(-T * 0.045, -T * 0.045, T * 0.09, T * 0.09); c.restore(); }
+    else { c.beginPath(); c.arc(ox, oy, T * 0.04, 0, 7); c.fill(); }
+    c.restore();
   }
   // ---------- explosions ----------
   function drawFlames(c, g) {
@@ -937,7 +1216,7 @@ body.landscape #pad{--a:64px}
     c.fillStyle = 'rgba(255,255,255,0.5)'; c.beginPath(); c.ellipse(-T * 0.2, -T * 0.6, T * 0.12, T * 0.035, -0.2, 0, 7); c.fill();
   }
   function drawBossHp(c, e) {
-    var cx = (e.x + 0.5) * T, top = (e.y + 0.5) * T - T * 1.25, n = 6, pw = T * 0.16, gap = T * 0.04, tw = n * pw + (n - 1) * gap, x0 = cx - tw / 2;
+    var cx = (e.x + 0.5) * T, top = (e.y + 0.5) * T - T * 1.25, n = Math.max(1, e.maxHp || e.hp || 6), pw = T * 0.14, gap = T * 0.03, tw = n * pw + (n - 1) * gap, x0 = cx - tw / 2;
     c.fillStyle = 'rgba(15,12,35,0.75)'; rr(c, x0 - T * 0.06, top - T * 0.06, tw + T * 0.12, T * 0.2, T * 0.1); c.fill();
     for (var i = 0; i < n; i++) { var on = i < e.hp; c.fillStyle = on ? (e.hp <= 2 ? '#ff5a5a' : '#5fff8a') : 'rgba(255,255,255,0.15)'; rr(c, x0 + i * (pw + gap), top, pw, T * 0.08, T * 0.04); c.fill(); }
   }
@@ -986,7 +1265,7 @@ body.landscape #pad{--a:64px}
     if (g.portal) drawPortal(c, g.portal);
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (g.items[y][x] && g.map[y][x] === E.FLOOR) drawItem(c, x * T, y * T, g.items[y][x]);
     for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (g.map[y][x] === E.CRATE) blit(c, cs, x * T, y * T);
-    g.bombs.forEach(function (b) { drawBomb(c, { x: b.x + (b.slide ? (EDIR[b.slide][0] * b.sp) : 0), y: b.y + (b.slide ? EDIR[b.slide][1] * b.sp : 0), timer: b.timer }); });
+    g.bombs.forEach(function (b) { drawBomb(c, { x: b.x + (b.slide ? (EDIR[b.slide][0] * b.sp) : 0), y: b.y + (b.slide ? EDIR[b.slide][1] * b.sp : 0), timer: b.timer, fromBoss: b.fromBoss }); });
     var ents = g.enemies.filter(function (e) { return e.alive; }).concat(g.players.filter(function (p) { return p.alive || p.deadT < 0.6; })).sort(function (a, b) { return a.y - b.y; });
     ents.forEach(function (e) { if (e.kind === 'player') drawRobot(c, e, e.alive ? 1 : Math.max(0, 1 - e.deadT / 0.6)); else drawEnemy(c, e); });
     drawFlames(c, g);
@@ -1169,7 +1448,7 @@ body.landscape #pad{--a:64px}
     if (g.mode === 'story') {
       if (g.status === 'won') {
         if (g.score > data.best) data.best = g.score;
-        if (g.level + 1 >= E.LEVELS.length) { data.story = null; save(); overlay('You did it!', 'You beat all 12 levels and the Mega Bolt. Final score: ' + g.score + '. Great teamwork!', [['Play Again', 'story', 'big'], ['Home', 'home', 'back']]); }
+        if (g.level + 1 >= E.LEVELS.length) { data.story = null; save(); overlay('You did it!', 'You beat all ' + E.LEVELS.length + ' levels and the Ultra Bolt. Final score: ' + g.score + '. Great teamwork!', [['Play Again', 'story', 'big'], ['Home', 'home', 'back']]); }
         else { data.story = { level: g.level + 1, difficulty: g.diff, carry: E.carry(g) }; save(); overlay('Level Clear!', E.LEVELS[g.level].name + ' done. Score: ' + g.score, [['Next Level', 'next', 'big'], ['Home', 'home', 'back']]); }
       } else if (g.status === 'dead') { data.story.carry = Object.assign({}, data.story.carry, { lives: g.lives }); save(); overlay(g.timeUp ? "Time's up!" : 'Oops!', (g.timeUp ? 'The clock ran out. ' : '') + 'You have ' + g.lives + (g.lives === 1 ? ' life' : ' lives') + ' left. Try again!', [['Try Again', 'again', 'big'], ['Home', 'home', 'back']]); }
       else { data.story = { level: g.level, difficulty: g.diff, attempt: data.story ? data.story.attempt : 0, carry: Object.assign({}, data.story ? data.story.carry : E.carry(g), { lives: E.DIFF[g.diff].lives }) }; save(); overlay(g.timeUp ? "Time's up! Game Over" : 'Game Over', 'Nice try! You can start again from level ' + (g.level + 1) + ' with full lives.', [['Retry Level', 'retry', 'big'], ['Home', 'home', 'back']]); }
